@@ -1,0 +1,36 @@
+# Cloudflare Tunnel — szablon konfiguracji
+#
+# INSTRUKCJA:
+#   1. Skopiuj do config.yml (bez .example)
+#   2. Podmień <TUNNEL_ID> na UUID z `cloudflared tunnel list`
+#   3. Umieść credentials w infra/cloudflared/<TUNNEL_ID>.json
+#      (ścieżka musi być zgodna z credentials-file poniżej)
+#   4. Credentials NIE commituj — gitignore pokrywa *.json
+
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+# Wymuszaj logi w formacie JSON (łatwiejsze do scrapowania)
+loglevel: info
+logfile: /var/log/cloudflared.log
+
+# Tunel ingressowy:
+#  - domena główna + wildcard trafia do Caddy
+#  - catchall → 404 (odrzucamy wszystko inne)
+ingress:
+  - hostname: wycinka.app
+    service: http://caddy:80
+  - hostname: "*.wycinka.app"
+    service: http://caddy:80
+  - service: http_status:404
+
+# Opcjonalnie: wymuszenie HTTP/2 (domyślne) i minimalna wersja TLS
+# ---
+# warp-routing:
+#   enabled: true
+#
+# originRequest:
+#   connectTimeout: 30s
+#   noHappyEyeballs: false
+#   keepAliveConnections: 4
+#   keepAliveTimeout: 90s
