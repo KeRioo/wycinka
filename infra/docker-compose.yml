@@ -1,0 +1,73 @@
+name: wycinka
+
+services:
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    image: wycinka-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - api-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - wycinka-net
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    image: wycinka-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - wycinka-net
+
+  caddy:
+    build: ./caddy
+    image: wycinka-caddy:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - wycinka-net
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.5.0
+    command: tunnel --config /etc/cloudflared/config.yml run
+    restart: unless-stopped
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+    networks:
+      - wycinka-net
+    depends_on:
+      - caddy
+
+volumes:
+  api-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  wycinka-net:
+    driver: bridge
