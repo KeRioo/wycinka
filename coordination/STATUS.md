@@ -69,3 +69,44 @@ DoD:
 3. **Dla frontendu:** `docker-compose.yml` oczekuje `Dockerfile` w `apps/web/` serwujący statyczne pliki na porcie 80 (w produkcji — multi-stage build). `Dockerfile.dev` dla dev compose z hot reload.
 
 4. **Dla ETL:** Katalogi runtime: `data/pmtiles/`, `data/sqlite/`, `data/etl-staging/`. Volume `api-data` jest zamontowany w kontenerze api jako `/app/data`. SQLite z R-tree oczekiwany w `data/sqlite/parcels.sqlite`, PMTiles w `data/pmtiles/dzialki.pmtiles`.
+
+---
+
+## ETL (subagent: etl)
+
+Branch: `feat/etl-scaffold`
+
+- [x] `egib_sync/__init__.py` + `egib_sync/config.py` — Pydantic Settings, env override (`EGIB_*`)
+- [x] `egib_sync/logging.py` — structlog (JSON production, pretty dev), idempotent
+- [x] `egib_sync/retry.py` — exponential backoff helper (testowane property-based)
+- [x] `egib_sync/downloader.py` — powiat list download + concurrent GPKG download (respx mockowane)
+- [x] `egib_sync/merger.py` — atomic merge do `merged.gpkg`, walidacja schematu
+- [x] `egib_sync/pmtiles_gen.py` — wrapper `tippecanoe` z timeout i error classification
+- [x] `egib_sync/sqlite_loader.py` — import do SQLite z R-tree i `sync_meta`
+- [x] `egib_sync/pipeline.py` — orchestracja 4 etapów z atomicity i rollback
+- [x] `egib_sync/__main__.py` — CLI entrypoint: `--powiat`, `--skip-*`, `--dry-run`, `--report`
+- [x] `tests/test_cli.py` — 11 testów CLI (help, dry-run, report, log level, exit codes 0/1/2/130)
+- [x] `README.md` — quickstart, stages, atomicity, troubleshooting
+- [x] `.gitignore` — `coverage.xml` zignorowany globalnie
+
+**Pinned wersje:** python 3.12, pytest 9.x, pydantic-settings, structlog, respx, hypothesis
+**CLI exit codes:** 0 = sukces, 1 = wyjątek, 2 = częściowy sukces, 130 = Ctrl+C
+**Coverage `__main__.py`:** 97% (58 stmts, 2 miss: linie niedostępne w argparse help flow)
+**Wszystkie testy:** 143 zielone (132 istniejące + 11 nowych CLI)
+
+DoD:
+- [x] Każdy moduł ETL ma testy (132 przed CLI; 143 po CLI)
+- [x] Atomicity: każdy etap pisze do `.tmp`, rename po sukcesie, restore z backupu przy błędzie
+- [x] Rollback: `data/backups/{timestamp}/` zachowuje poprzednią wersję każdego artifactu
+- [x] Retencja: starych backupów czyszczonych do `RETENTION__BACKUPS_KEEP=2`
+- [x] CLI: argparse, brak dodatkowych zależności runtime
+- [x] Dry-run: nie pisze plików, waliduje konfigurację
+- [x] README: quickstart + troubleshooting (tippecanoe, timeout, disk space)
+- [x] STATUS.md zaktualizowany
+
+**Znalezione problemy / uwagi dla innych agentów:**
+
+1. **`get_settings()` nie akceptuje kwargs** — CLI buduje `Settings(**overrides)` bezpośrednio (nie modyfikowałem sygnatury, żeby nie zmieniać kontraktu).
+2. **`PipelineResult`:** `started_at`/`finished_at` to `datetime`, `success` to property (`not self.errors`), brak pola `elapsed_seconds` — liczone w runtime jako `finished - started`.
+3. **Coverage:** `coverage.xml` musi być w root `.gitignore` (reguła `coverage/` łapie tylko katalogi).
+4. **Atomicity jest implementowana w `_run_*` helperach** w `pipeline.py` — każdy etap ma wzorzec: `backup_existing()` → `ensure_dirs()` → właściwa praca → `rename(.tmp → final)`. Wyjątek w trakcie pracy triggeruje `_fail_with_partial()` który przywraca z backupu.
