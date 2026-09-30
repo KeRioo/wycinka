@@ -60,7 +60,7 @@ def test_validate_schemas_when_match_then_no_raise(tmp_path: Path) -> None:
 
 def test_validate_schemas_when_column_mismatch_then_raises(tmp_path: Path) -> None:
     a = write_minimal_gpkg(tmp_path / "a.gpkg")
-    b = write_minimal_gpkg(tmp_path / "b.gpkg", extra_columns={"foo": ["x"] * 2})
+    b = write_minimal_gpkg(tmp_path / "b.gpkg", extra_columns={"foo": ["x"] * 3})
     with pytest.raises(SchemaMismatchError, match="column mismatch"):
         validate_schemas(read_layer(a), read_layer(b))
 
@@ -84,7 +84,7 @@ def test_validate_file_schemas_when_empty_then_raises() -> None:
 
 def test_validate_file_schemas_when_mismatch_then_raises(tmp_path: Path) -> None:
     a = write_minimal_gpkg(tmp_path / "a.gpkg")
-    b = write_minimal_gpkg(tmp_path / "b.gpkg", extra_columns={"foo": ["x"] * 2})
+    b = write_minimal_gpkg(tmp_path / "b.gpkg", extra_columns={"foo": ["x"] * 3})
     with pytest.raises(SchemaMismatchError):
         validate_file_schemas([a, b])
 
@@ -107,17 +107,17 @@ def test_merge_gpkg_files_when_empty_then_raises(tmp_path: Path) -> None:
 
 def test_merge_gpkg_files_when_schema_mismatch_then_raises(tmp_path: Path) -> None:
     a = write_minimal_gpkg(tmp_path / "a.gpkg")
-    b = write_minimal_gpkg(tmp_path / "b.gpkg", extra_columns={"foo": ["x"] * 2})
+    b = write_minimal_gpkg(tmp_path / "b.gpkg", extra_columns={"foo": ["x"] * 3})
     out = tmp_path / "merged.gpkg"
     with pytest.raises(SchemaMismatchError):
         merge_gpkg_files([a, b], out)
 
 
-def test_merge_gpkg_files_when_atomic_write_then_part_removed(tmp_path: Path) -> None:
+def test_merge_gpkg_files_when_atomic_write_then_tmp_removed(tmp_path: Path) -> None:
     a, b = _write_pair(tmp_path)
     out = tmp_path / "merged.gpkg"
     merge_gpkg_files([a, b], out)
-    assert not (tmp_path / "merged.gpkg.part").exists()
+    assert not (tmp_path / "merged.tmp.gpkg").exists()
 
 
 def test_merge_gpkg_files_when_three_files_then_correct_total(tmp_path: Path) -> None:
