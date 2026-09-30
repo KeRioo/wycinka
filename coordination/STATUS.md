@@ -72,6 +72,115 @@ DoD:
 
 ---
 
+## Backend (subagent: backend)
+
+Branch: `feat/backend-scaffold`
+
+- [x] FastAPI app structure (`apps/api/`)
+- [x] SQLite + R-tree (`parcels`, `parcels_rtree`, `parcels_rtree_map`, `sync_meta`, triggery)
+- [x] PMTiles serving z HTTP Range (`/api/v1/pmtiles/dzialki` — 200/206/304/416, ETag, CORS)
+- [x] `/health` i `/api/v1/version`
+- [x] `/api/v1/parcel?lat&lng` (point query, R-tree + exact pip)
+- [x] `/api/v1/parcel/{teryt}` (walidacja formatu TERYT)
+- [x] `/api/v1/parcel/aggregate?id=…` (max 20 IDs, Polygon/MultiPolygon)
+- [x] `/api/v1/search?q=&limit=` (prefix LIKE)
+- [x] WKT parser (POLYGON, holes, MULTIPOLYGON, normalizacja CW→CCW)
+- [x] Pydantic v2 models (`ParcelResponse`, `ApiError`, etc.)
+- [x] Pydantic Settings + structlog
+- [x] aiosqlite (async DB access)
+- [x] Sample fixtures (10 działek z Warszawy, test PMTiles blob)
+- [x] Dockerfile multi-stage (python:3.12-slim, non-root, healthcheck)
+- [x] Testy: 55/55, coverage 86%
+
+**Coverage:**
+- models/parcel.py: 100%
+- core/logging.py: 100%
+- core/config.py: 97%
+- api/search.py: 95%
+- api/pmtiles.py: 93% (Range/ETag/304/416/503/CORS)
+- api/parcels.py: 88%
+- api/health.py: 82%
+- main.py: 88%
+- services/parcel_service: 87%
+- services/wkt_parser: 79%
+- core/db.py: 76%
+- **TOTAL: 86%**
+
+**ruff check:** All checks passed
+**mypy --strict:** no issues found in 16 source files
+
+DoD:
+- [x] Wszystkie endpointy z `docs/api-contract.md` zaimplementowane
+- [x] PMTiles Range requests
+- [x] WKT parser z testami property-based (hypothesis)
+- [x] Coverage ≥ 80%
+- [x] ruff + mypy strict bez błędów
+- [x] pytest wszystkie zielone
+- [x] Dockerfile multi-stage
+- [x] README w `apps/api/README.md`
+
+**Znalezione problemy / uwagi dla innych agentów:**
+
+1. **R-tree w SQLite:** pierwsza kolumna rtree musi być INTEGER rowid, więc `docs/data-schema.md` wymaga aktualizacji. Backend używa tabeli mapującej `parcels_rtree_map(parcel_id TEXT, rtree_id INTEGER UNIQUE)` + JOIN w `parcel_service._candidates_for_point`. **UWAGA: docs/data-schema.md jest jeszcze nieaktualny** — schema różni się od tego co zrobiliśmy. Nadzorca powinien to zsynchronizować przed ETL użyje tego samego wzorca.
+
+2. **EGiB zwraca pierścienie CW** — parser automatycznie normalizuje do CCW outer / CW holes (RFC 7946). Testowane w `test_parse_polygon_when_outer_is_clockwise_normalizes_to_ccw`.
+
+3. **Alembic migracje:** pominięte (full-reload bazy za każdym sync, jak w data-schema.md §Migracje).
+
+4. **Rate limiting:** 60 req/s per IP — wymaga warstwy nginx/cloudflared (infra). Backend sam tego nie robi.
+
+5. **Dockerfile:** nie był testowany lokalnie (brak dockera w PATH). Składniowo poprawny.
+
+---
+
+## Frontend (subagent: frontend)
+
+Branch: `feat/frontend-scaffold`
+
+- [x] Vite 5 + React 18 + TypeScript 5 (strict, no `any`, alias `@/*`)
+- [x] Tailwind 3 z motywem forest (forest/bark/cream/stone)
+- [x] React Router v6, Zustand, ky, Dexie, MapLibre + pmtiles, vite-plugin-pwa
+- [x] Klient API 1:1 z `docs/api-contract.md` (discriminated union `ParcelResponse`, `ApiError` z mapowaniem status→code)
+- [x] Dexie schema: `projects`, `trees`, 17 gatunków PL (stała lista), 7 przedziałów obwodu
+- [x] `MapView` z OSM base + warstwa `dzialki` + highlight + klik → API → popup
+- [x] Dockerfile multi-stage (node:20-alpine → nginx:1.27-alpine, non-root, HEALTHCHECK)
+- [x] nginx.conf: SPA fallback, gzip, immutable assets, no-cache dla sw.js
+- [x] 14 plików testów jednostkowych (Vitest + Testing Library + MSW + fake-indexeddb)
+- [x] Playwright E2E (chromium, mockowane API)
+- [x] PWA: manifest + service worker registration + precache (19 entries, 1112 KiB)
+
+**Coverage:**
+- 86.63% lines / 90.32% functions / 79.11% branches
+- **75 testów jednostkowych zielonych**
+- typecheck: 0 errors, lint: 0 warnings
+
+DoD:
+- [x] Vite dev server (`npm run dev`)
+- [x] `npm run build` bez błędów
+- [x] TypeScript strict, zero `any`, zero `tsc` errors
+- [x] Vitest coverage ≥ 80%
+- [x] MapLibre ładuje PMTiles z `/api/v1/pmtiles/dzialki`
+- [x] Klik na mapę → API → popup
+- [x] PWA: manifest + service worker
+- [x] Dockerfile multi-stage
+- [x] Playwright E2E przechodzi
+- [x] README w `apps/web/README.md`
+
+**Znalezione problemy / uwagi dla innych agentów:**
+
+1. **Branch confusion:** początkowo commity trafiły na `feat/backend-scaffold` (system przeniósł HEAD). Naprawione w trakcie (`git branch -f feat/frontend-scaffold HEAD`). Backend branch przywrócony do właściwego stanu przed ostatecznym commitem.
+
+2. **TODO dla follow-up (nie w MVP scaffold):**
+   - FAB dodawania drzewa z GPS i strzałkami 25cm (komponent)
+   - Widok projektu z markerami drzew (kolor/wielkość)
+   - Kreator PDF (jsPDF + html2canvas + kompas)
+   - Prawdziwe PNG ikony PWA (obecnie: placeholder)
+   - Backup/restore JSON
+
+3. **MapLibre + Leaflet:** MapLibre wybrany zamiast Leaflet (lepsze wsparcie PMTiles / vector tiles). Leaflet wciąż w zależnościach jako fallback.
+
+---
+
 ## ETL (subagent: etl)
 
 Branch: `feat/etl-scaffold`
