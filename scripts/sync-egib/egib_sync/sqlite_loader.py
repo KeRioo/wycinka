@@ -448,13 +448,18 @@ def _row_to_dict(row: tuple[Any, ...]) -> dict[str, Any]:
 
 
 def parcels_count(db_path: Path) -> int:
-    """Return the number of parcels currently stored, or 0 if DB missing."""
+    """Return the number of parcels currently stored, or 0 if DB missing/invalid."""
     if not db_path.exists():
         return 0
-    conn = _connect(db_path)
+    try:
+        conn = _connect(db_path)
+    except sqlite3.DatabaseError:
+        return 0
     try:
         cur = conn.execute("SELECT COUNT(*) FROM parcels")
         return int(cur.fetchone()[0])
+    except sqlite3.OperationalError:
+        return 0
     finally:
         conn.close()
 

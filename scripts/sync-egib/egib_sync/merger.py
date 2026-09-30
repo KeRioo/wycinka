@@ -121,9 +121,9 @@ def merge_gpkg_files(input_files: list[Path], output: Path) -> Path:
     merged = gpd.GeoDataFrame(pd_concat(frames, ignore_index=True), crs=base.crs)
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = output.with_name(output.stem + ".tmp.gpkg")
-    merged.to_file(str(tmp_path), driver="GPKG")
-    tmp_path.replace(output)
+    if output.exists():
+        output.unlink()
+    merged.to_file(str(output), driver="GPKG")
     logger.info(
         "merge_done",
         output=str(output),

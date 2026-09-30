@@ -113,11 +113,26 @@ def test_merge_gpkg_files_when_schema_mismatch_then_raises(tmp_path: Path) -> No
         merge_gpkg_files([a, b], out)
 
 
-def test_merge_gpkg_files_when_atomic_write_then_tmp_removed(tmp_path: Path) -> None:
+def test_merge_gpkg_files_when_target_exists_then_overwrites(tmp_path: Path) -> None:
     a, b = _write_pair(tmp_path)
     out = tmp_path / "merged.gpkg"
     merge_gpkg_files([a, b], out)
-    assert not (tmp_path / "merged.tmp.gpkg").exists()
+    assert out.exists()
+    merge_gpkg_files([a, b], out)
+    assert out.exists()
+    assert len(read_layer(out)) == 5
+
+
+def test_merge_gpkg_files_layer_name_matches_filename(tmp_path: Path) -> None:
+    """Regression: GPKG layer name is derived from the filename at write time.
+    Renaming the file later does not change the layer name, which breaks
+    readers that default to a layer named after the file basename.
+    """
+    a, b = _write_pair(tmp_path)
+    out = tmp_path / "final.gpkg"
+    merge_gpkg_files([a, b], out)
+    layers = discover_layers(out)
+    assert "final" in layers
 
 
 def test_merge_gpkg_files_when_three_files_then_correct_total(tmp_path: Path) -> None:
