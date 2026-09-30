@@ -30,6 +30,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - wycinka-net
 
@@ -50,7 +56,13 @@ services:
       api:
         condition: service_healthy
       web:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   cloudflared:
     image: cloudflare/cloudflared:2024.5.0
@@ -61,7 +73,8 @@ services:
     networks:
       - wycinka-net
     depends_on:
-      - caddy
+      caddy:
+        condition: service_healthy
 
 volumes:
   api-data:
