@@ -94,10 +94,8 @@ class ParcelService:
         results: list[dict[str, Any]] = []
         for row in rows:
             teryt_value = str(row["teryt"])
-            label = (
-                f"{teryt_value} — {row['region_name'] or ('Obręb ' + str(row['region']))}, "
-                f"{row['commune']}"
-            )
+            region_label = row["region_name"] or ("Obręb " + str(row["region"]))
+            label = f"{teryt_value} — {region_label}, {row['commune']}"
             results.append(
                 {
                     "id": str(row["id"]),
@@ -111,7 +109,8 @@ class ParcelService:
         sql = (
             f"SELECT {_SELECT_COLUMNS} "
             "FROM parcels p "
-            "JOIN parcels_rtree r ON r.id = p.id "
+            "JOIN parcels_rtree_map m ON m.parcel_id = p.id "
+            "JOIN parcels_rtree r ON r.id = m.rtree_id "
             "WHERE r.min_lng <= ? AND r.max_lng >= ? "
             "  AND r.min_lat <= ? AND r.max_lat >= ? "
             "ORDER BY p.area_m2 ASC"

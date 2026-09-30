@@ -49,23 +49,37 @@ CREATE INDEX IF NOT EXISTS idx_parcels_number ON parcels(number);
 
 RTREE_SCHEMA_SQL = """
 CREATE VIRTUAL TABLE IF NOT EXISTS parcels_rtree USING rtree(
-  id,
+  id INTEGER PRIMARY KEY,
   min_lng, max_lng,
   min_lat, max_lat
 );
+
+CREATE TABLE IF NOT EXISTS parcels_rtree_map (
+  parcel_id TEXT NOT NULL UNIQUE,
+  rtree_id INTEGER NOT NULL UNIQUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_parcels_rtree_map_parcel
+  ON parcels_rtree_map(parcel_id);
 """
 
 RTREE_TRIGGERS_SQL = """
 CREATE TRIGGER IF NOT EXISTS parcels_rtree_insert AFTER INSERT ON parcels
 BEGIN
-  INSERT INTO parcels_rtree VALUES (
-    NEW.id, NEW.bbox_min_lng, NEW.bbox_max_lng, NEW.bbox_min_lat, NEW.bbox_max_lat
+  INSERT INTO parcels_rtree (min_lng, max_lng, min_lat, max_lat)
+  VALUES (
+    NEW.bbox_min_lng, NEW.bbox_max_lng, NEW.bbox_min_lat, NEW.bbox_max_lat
   );
+  INSERT INTO parcels_rtree_map (parcel_id, rtree_id)
+  VALUES (NEW.id, last_insert_rowid());
 END;
 
 CREATE TRIGGER IF NOT EXISTS parcels_rtree_delete AFTER DELETE ON parcels
 BEGIN
-  DELETE FROM parcels_rtree WHERE id = OLD.id;
+  DELETE FROM parcels_rtree_map WHERE parcel_id = OLD.id;
+  DELETE FROM parcels_rtree WHERE id = (
+    SELECT rtree_id FROM parcels_rtree_map WHERE parcel_id = OLD.id
+  );
 END;
 """
 

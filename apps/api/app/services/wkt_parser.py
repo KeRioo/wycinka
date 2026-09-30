@@ -85,15 +85,18 @@ def _parse_numbers(blob: str) -> list[float]:
     blob = blob.strip()
     if not blob:
         raise WKTError("Empty coordinate list")
+
     raw_tokens = _split_top_level(blob)
     if len(raw_tokens) == 1 and "," in raw_tokens[0]:
         raw_tokens = list(raw_tokens[0].split(","))
+
     numbers: list[float] = []
     for token in raw_tokens:
-        match = _NUMBER_RE.fullmatch(token.strip())
-        if not match:
-            raise WKTError(f"Invalid number token: {token!r}")
-        numbers.append(float(match.group(0)))
+        for piece in token.split():
+            match = _NUMBER_RE.fullmatch(piece.strip())
+            if not match:
+                raise WKTError(f"Invalid number token: {piece!r}")
+            numbers.append(float(match.group(0)))
     return numbers
 
 
@@ -138,7 +141,14 @@ def _parse_multipolygon(blob: str) -> MultiPolygon:
         raise WKTError("Unbalanced parentheses in MULTIPOLYGON")
     if current:
         polygons_raw.append("".join(current))
-    return [_parse_rings(polygon_blob) for polygon_blob in polygons_raw]
+
+    cleaned: list[str] = []
+    for polygon_blob in polygons_raw:
+        polygon_blob = polygon_blob.strip()
+        if polygon_blob.startswith("(") and polygon_blob.endswith(")"):
+            polygon_blob = polygon_blob[1:-1].strip()
+        cleaned.append(polygon_blob)
+    return [_parse_rings(polygon_blob) for polygon_blob in cleaned]
 
 
 def _polygon_rings_to_geojson(rings: PolygonRings) -> dict[str, Any]:
@@ -161,15 +171,18 @@ def _validate_rings(rings: PolygonRings) -> None:
         raise WKTError("Polygon outer ring must have at least 4 positions (closed)")
     if outer[0] != outer[-1]:
         raise WKTError("Polygon outer ring must be closed (first point equals last)")
-    if not _ring_is_counter_clockwise(outer):
-        raise WKTError("Polygon outer ring must be counter-clockwise (GeoJSON RFC 7946)")
-    for index, hole in enumerate(rings[1:], start=1):
+    if _ring_is_clockwise(outer):
+        outer_reversed = list(reversed(outer))
+        rings[0] = outer_reversed
+        outer = outer_reversed
+    for index in range(1, len(rings)):
+        hole = rings[index]
         if len(hole) < 4:
             raise WKTError(f"Hole {index} must have at least 4 positions")
         if hole[0] != hole[-1]:
             raise WKTError(f"Hole {index} must be closed (first point equals last)")
-        if not _ring_is_clockwise(hole):
-            raise WKTError(f"Hole {index} must be clockwise (opposite of outer)")
+        if _ring_is_counter_clockwise(hole):
+            rings[index] = list(reversed(hole))
 
 
 def _parse_ring(ring_blob: str) -> Ring:
@@ -206,9 +219,13 @@ def _split_paren_segments(blob: str) -> list[str]:
                 if segment:
                     segments.append(segment)
                 current = []
-        elif char == "," and depth == 1:
-            segments.append("".join(current).strip())
+        elif char == "," and depth >= 2:
+            segment = "".join(current).strip()
+            if segment:
+                segments.append(segment)
             current = []
+        elif char in {",", " ", "\t", "\n"} and depth == 0:
+            continue
         else:
             current.append(char)
     if depth != 0:
@@ -248,7 +265,7 @@ def _signed_area(points: Sequence[Point]) -> float:
     for index in range(len(points) - 1):
         x1, y1 = points[index]
         x2, y2 = points[index + 1]
-        total += (x2 - x1) * (y2 + y1)
+        total += x1 * y2 - x2 * y1
     return total / 2.0
 
 
