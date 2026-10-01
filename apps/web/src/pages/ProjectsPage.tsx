@@ -76,9 +76,8 @@ export default function ProjectsPage(): JSX.Element {
   const handleCreate = async (): Promise<void> => {
     setCreating(true);
     try {
-      const created = await createAndActivate(`Projekt ${String(projects.length + 1)}`);
+      await createAndActivate(`Projekt ${String(projects.length + 1)}`);
       navigate('/map');
-      return created;
     } finally {
       setCreating(false);
     }

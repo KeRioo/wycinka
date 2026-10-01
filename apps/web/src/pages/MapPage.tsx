@@ -56,12 +56,9 @@ export default function MapPage(): JSX.Element {
     mapRef.current = map;
   }, []);
 
-  const handleTreeClick = useCallback(
-    (id: string) => {
-      void useTreeStore.getState().selectTreeForEdit(id);
-    },
-    [],
-  );
+  const handleTreeClick = useCallback((id: string) => {
+    useTreeStore.getState().selectTreeForEdit(id);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;

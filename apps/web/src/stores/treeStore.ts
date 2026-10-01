@@ -53,7 +53,7 @@ interface TreeState {
   nudge: (dxMeters: number, dyMeters: number) => void;
   useGps: (gpsPosition: { lat: number; lng: number; accuracy?: number }) => void;
   save: (projectId: string) => Promise<Tree>;
-  selectTreeForEdit: (id: string) => Promise<void>;
+  selectTreeForEdit: (id: string) => void;
   updateTree: (id: string, patch: Partial<TreeDraft>) => Promise<Tree>;
   deleteTree: (id: string) => Promise<void>;
   clear: () => void;
@@ -229,7 +229,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     return tree;
   },
 
-  selectTreeForEdit: (id) => {
+  selectTreeForEdit: (id): void => {
     const tree = get().trees.find((t) => t.id === id);
     if (tree === undefined) {
       return;
