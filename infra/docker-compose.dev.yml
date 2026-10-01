@@ -1,0 +1,52 @@
+name: wycinka-dev
+
+services:
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile.dev
+    image: wycinka-api:dev
+    restart: unless-stopped
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ../apps/api/app:/app/app
+      - api-data-dev:/app/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - wycinka-dev-net
+
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ../apps/web:/app
+      - web-node-modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port ${WEB_PORT:-5173}"
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    environment:
+      - VITE_API_URL=http://localhost:${API_PORT:-8000}/api/v1
+      - NODE_ENV=development
+    networks:
+      - wycinka-dev-net
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  api-data-dev:
+  web-node-modules:
+
+networks:
+  wycinka-dev-net:
+    driver: bridge

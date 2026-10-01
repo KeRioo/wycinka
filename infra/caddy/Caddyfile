@@ -1,0 +1,64 @@
+# Caddyfile — wycinka.app
+# Auto-HTTPS, reverse proxy, kompresja.
+# W produkcji DOMAIN ustawione przez Cloudflare Tunnel + DNS challenge.
+
+{$DOMAIN:localhost} {
+	encode gzip zstd
+
+	# Bezpieczne nagłówki dla PWA
+	header {
+		# HSTS — agresywne, bo domena obsługiwana przez Cloudflare
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		# Anty-clickjacking
+		X-Frame-Options "SAMEORIGIN"
+		# MIME sniffing
+		X-Content-Type-Options "nosniff"
+		# Referrer
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Permissions
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+		# CORS — dla endpointów API, szerokie bo PWA na różnych domenach
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type, Authorization, Range"
+	}
+
+	# --- Healthcheck (prosto do API, krótka ścieżka) ---
+	handle /health* {
+		reverse_proxy api:8000
+	}
+
+	# --- API + PMTiles ---
+	# Wszystko pod /api/* leci do backendu.
+	# PMTiles wymaga pełnego wsparcia HTTP Range (header_down + transparent).
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			# Ważne: bez buforowania odpowiedzi, streaming
+			flush_interval -1
+			# Dłuższy timeout dla dużych plików PMTiles
+			transport http {
+				response_header_timeout 60s
+				read_timeout 60s
+				write_timeout 60s
+			}
+		}
+	}
+
+	# --- Frontend PWA (wszystko inne) ---
+	handle {
+		reverse_proxy web:80 {
+			header_up Host {host}
+			# Tryb PWA: agresywne cache dla zbudowanych assetów
+			header_down Cache-Control "public, max-age=3600"
+		}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
