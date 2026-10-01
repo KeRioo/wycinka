@@ -1,0 +1,16 @@
+build
+.cache
+.parcel-cache
+.eslintcache
+.DS_Store
+.env.local
+.env.*.local
+*.log
+coverage
+playwright-report
+test-results
+node_modules
+dist
+.idea
+.vscode
+*.tsbuildinfo
