@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { addTree, createProject, db, deleteProject, deleteTree, listProjects, listTrees } from '@/db/schema';
+import {
+  addTree,
+  createProject,
+  db,
+  deleteProject,
+  deleteTree,
+  listProjects,
+  listTrees,
+  updateTree,
+} from '@/db/schema';
 import { CURRENT_VERSION, runMigrations } from '@/db/migrations';
 
 describe('Dexie schema', () => {
@@ -76,6 +85,25 @@ describe('Dexie schema', () => {
     await deleteTree(tree.id);
     const trees = await listTrees(project.id);
     expect(trees).toHaveLength(0);
+  });
+
+  it('should update tree fields', async () => {
+    const project = await createProject({ name: 'Test' });
+    const tree = await addTree({
+      projectId: project.id,
+      lat: 52.23,
+      lng: 21.01,
+      species: 'Buk',
+      circumference: 60,
+    });
+    const updated = await updateTree(tree.id, { species: 'Dąb', circumference: 90 });
+    expect(updated.species).toBe('Dąb');
+    expect(updated.circumference).toBe(90);
+    expect(updated.lat).toBe(52.23);
+  });
+
+  it('should throw when updating non-existent tree', async () => {
+    await expect(updateTree('does-not-exist', { species: 'X' })).rejects.toThrow();
   });
 });
 

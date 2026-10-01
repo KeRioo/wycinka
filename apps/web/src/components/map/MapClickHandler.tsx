@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Map as MaplibreMap } from 'maplibre-gl';
-import MapView from './MapView';
+import MapView, { type TreeFeatureProperties } from './MapView';
 import { useMapStore } from '@/stores/mapStore';
 import { useParcelLookup } from '@/hooks/useAPI';
 import type { Parcel, PolygonGeometry } from '@/services/api.types';
@@ -27,9 +27,15 @@ function toGeoJSONPolygon(parcel: Parcel): GeoJSON.Polygon {
 
 interface MapClickHandlerProps {
   onMapReady?: (map: MaplibreMap) => void;
+  treeLayer?: GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null;
+  onTreeClick?: (id: string) => void;
 }
 
-export default function MapClickHandler({ onMapReady }: MapClickHandlerProps = {}): JSX.Element {
+export default function MapClickHandler({
+  onMapReady,
+  treeLayer,
+  onTreeClick,
+}: MapClickHandlerProps = {}): JSX.Element {
   const selectedParcel = useMapStore((s) => s.selectedParcel);
   const highlightGeometry = selectedParcel ? toGeoJSONPolygon(selectedParcel) : null;
   const { lookup } = useParcelLookup();
@@ -47,6 +53,8 @@ export default function MapClickHandler({ onMapReady }: MapClickHandlerProps = {
       onMapClick={handleMapClick}
       onMapReady={onMapReady}
       highlightGeometry={highlightGeometry}
+      {...(treeLayer !== undefined ? { treeLayer } : {})}
+      {...(onTreeClick !== undefined ? { onTreeClick } : {})}
     />
   );
 }
