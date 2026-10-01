@@ -159,6 +159,18 @@ export async function listTrees(projectId: string): Promise<Tree[]> {
   return db.trees.where('projectId').equals(projectId).toArray();
 }
 
+export type TreeUpdate = Partial<Omit<Tree, 'id' | 'projectId' | 'capturedAt'>>;
+
+export async function updateTree(id: string, patch: TreeUpdate): Promise<Tree> {
+  const existing = await db.trees.get(id);
+  if (existing === undefined) {
+    throw new Error(`Drzewo ${id} nie istnieje`);
+  }
+  const next: Tree = { ...existing, ...patch };
+  await db.trees.put(next);
+  return next;
+}
+
 export async function deleteTree(id: string): Promise<void> {
   await db.trees.delete(id);
 }
