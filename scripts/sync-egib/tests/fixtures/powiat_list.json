@@ -1,0 +1,12 @@
+[
+  {"teryt": "1401", "name": "Powiat 1401", "url": "https://example.com/egib/1401.gpkg", "size_bytes": 1024, "etag": "etag-1401"},
+  {"teryt": "1402", "name": "Powiat 1402", "url": "https://example.com/egib/1402.gpkg", "size_bytes": 2048, "etag": "etag-1402"},
+  {"teryt": "1403", "name": "Powiat 1403", "url": "https://example.com/egib/1403.gpkg", "size_bytes": 3072, "etag": "etag-1403"},
+  {"teryt": "1404", "name": "Powiat 1404", "url": "https://example.com/egib/1404.gpkg", "size_bytes": 4096, "etag": "etag-1404"},
+  {"teryt": "1405", "name": "Powiat 1405", "url": "https://example.com/egib/1405.gpkg", "size_bytes": 5120, "etag": "etag-1405"},
+  {"teryt": "1406", "name": "Powiat 1406", "url": "https://example.com/egib/1406.gpkg", "size_bytes": 6144, "etag": "etag-1406"},
+  {"teryt": "1407", "name": "Powiat 1407", "url": "https://example.com/egib/1407.gpkg", "size_bytes": 7168, "etag": "etag-1407"},
+  {"teryt": "1408", "name": "Powiat 1408", "url": "https://example.com/egib/1408.gpkg", "size_bytes": 8192, "etag": "etag-1408"},
+  {"teryt": "1409", "name": "Powiat 1409", "url": "https://example.com/egib/1409.gpkg", "size_bytes": 9216, "etag": "etag-1409"},
+  {"teryt": "1410", "name": "Powiat 1410", "url": "https://example.com/egib/1410.gpkg", "size_bytes": 10240, "etag": "etag-1410"}
+]

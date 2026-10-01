@@ -59,6 +59,8 @@ logs/
 playwright-report/
 test-results/
 coverage/
+coverage.xml
+**/coverage.xml
 .nyc_output/
 
 # Cloudflare tunnel credentials

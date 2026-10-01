@@ -1,0 +1,53 @@
+{
+  "etag": "test-etag-001",
+  "parcels": [
+    {
+      "id": "141201_1.0001.6509",
+      "teryt": "141201_1.0001.6509",
+      "number": "6509",
+      "voivodeship": "mazowieckie",
+      "voivodeship_code": "14",
+      "county": "Warszawa",
+      "county_code": "1201",
+      "commune": "Warszawa",
+      "commune_code": "141201",
+      "region": "0001",
+      "region_name": "Obreb 1",
+      "area_m2": 1500.0,
+      "land_use": "Ls",
+      "geom_wkt": "POLYGON ((21.0 52.0, 21.005 52.0, 21.005 52.005, 21.0 52.005, 21.0 52.0))",
+      "centroid_lng": 21.0025,
+      "centroid_lat": 52.0025,
+      "bbox_min_lng": 21.0,
+      "bbox_min_lat": 52.0,
+      "bbox_max_lng": 21.005,
+      "bbox_max_lat": 52.005,
+      "fetched_at": "2026-09-29T03:00:00Z",
+      "datasource": "geoportal.gov.pl"
+    },
+    {
+      "id": "141201_1.0001.6510",
+      "teryt": "141201_1.0001.6510",
+      "number": "6510",
+      "voivodeship": "mazowieckie",
+      "voivodeship_code": "14",
+      "county": "Warszawa",
+      "county_code": "1201",
+      "commune": "Warszawa",
+      "commune_code": "141201",
+      "region": "0001",
+      "region_name": "Obreb 1",
+      "area_m2": 1600.0,
+      "land_use": "Ls",
+      "geom_wkt": "POLYGON ((21.01 52.0, 21.015 52.0, 21.015 52.005, 21.01 52.005, 21.01 52.0))",
+      "centroid_lng": 21.0125,
+      "centroid_lat": 52.0025,
+      "bbox_min_lng": 21.01,
+      "bbox_min_lat": 52.0,
+      "bbox_max_lng": 21.015,
+      "bbox_max_lat": 52.005,
+      "fetched_at": "2026-09-29T03:00:00Z",
+      "datasource": "geoportal.gov.pl"
+    }
+  ]
+}
