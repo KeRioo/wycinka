@@ -3,6 +3,7 @@ import Header from '@/components/layout/Header';
 import HomePage from '@/pages/HomePage';
 import MapPage from '@/pages/MapPage';
 import NotFound from '@/pages/NotFound';
+import ProjectsPage from '@/pages/ProjectsPage';
 
 export default function App(): JSX.Element {
   return (
@@ -12,6 +13,7 @@ export default function App(): JSX.Element {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/map" element={<MapPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

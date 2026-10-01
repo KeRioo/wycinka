@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl';
 import MapClickHandler from '@/components/map/MapClickHandler';
 import ParcelPopup from '@/components/map/ParcelPopup';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import AddTreePanel from '@/components/trees/AddTreePanel';
+import Fab from '@/components/trees/Fab';
+import { buildPendingFeature, treesToFeatureCollection } from '@/components/trees/TreeMarkers';
+import type { TreeFeatureProperties } from '@/components/map/MapView';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { useMapStore } from '@/stores/mapStore';
+import { useProjectStore } from '@/stores/projectStore';
+import { draftPosition, useTreeStore } from '@/stores/treeStore';
 
 const DEFAULT_ZOOM = 13;
 
@@ -13,15 +19,49 @@ export default function MapPage(): JSX.Element {
   const mapRef = useRef<MaplibreMap | null>(null);
   const popupRootRef = useRef<Root | null>(null);
   const popupContainerRef = useRef<HTMLDivElement | null>(null);
+
   const selectedParcel = useMapStore((s) => s.selectedParcel);
   const isLoading = useMapStore((s) => s.isLoading);
   const error = useMapStore((s) => s.error);
   const setSelected = useMapStore((s) => s.setSelectedParcel);
   const setError = useMapStore((s) => s.setError);
 
+  const projects = useProjectStore((s) => s.projects);
+  const activeProjectId = useProjectStore((s) => s.activeProjectId);
+  const projectsStatus = useProjectStore((s) => s.status);
+  const loadProjects = useProjectStore((s) => s.loadProjects);
+  const createAndActivate = useProjectStore((s) => s.createAndActivate);
+
+  const mode = useTreeStore((s) => s.mode);
+  const pending = useTreeStore((s) => s.pending);
+  const trees = useTreeStore((s) => s.trees);
+  const loadTrees = useTreeStore((s) => s.loadTrees);
+  const startPlacing = useTreeStore((s) => s.startPlacing);
+  const cancelTree = useTreeStore((s) => s.cancel);
+  const activeProjectIdFromTree = useTreeStore((s) => s.activeProjectId);
+
+  const { position, error: gpsError, loading: gpsLoading, refresh } = useGeolocation();
+
+  useEffect(() => {
+    void loadProjects();
+  }, [loadProjects]);
+
+  useEffect(() => {
+    if (activeProjectId !== null && activeProjectId !== activeProjectIdFromTree) {
+      void loadTrees(activeProjectId);
+    }
+  }, [activeProjectId, activeProjectIdFromTree, loadTrees]);
+
   const handleMapReady = useCallback((map: MaplibreMap) => {
     mapRef.current = map;
   }, []);
+
+  const handleTreeClick = useCallback(
+    (id: string) => {
+      void useTreeStore.getState().selectTreeForEdit(id);
+    },
+    [],
+  );
 
   useEffect(() => {
     const map = mapRef.current;
@@ -64,9 +104,49 @@ export default function MapPage(): JSX.Element {
     };
   }, [selectedParcel]);
 
+  const treeLayer = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null>(() => {
+    if (mode === 'placing' || mode === 'editing') {
+      if (pending === null) {
+        return null;
+      }
+      const pos = draftPosition(pending);
+      const pendingFeature = buildPendingFeature(
+        pos.lat,
+        pos.lng,
+        pending.species,
+        pending.circumference,
+      );
+      return treesToFeatureCollection(trees, pendingFeature);
+    }
+    return treesToFeatureCollection(trees);
+  }, [trees, pending, mode]);
+
+  const handleStartPlacing = (): void => {
+    if (activeProjectId === null) {
+      return;
+    }
+    if (position !== null) {
+      startPlacing({ gpsPosition: position });
+    } else {
+      startPlacing();
+    }
+  };
+
+  const handleCreateProject = async (): Promise<void> => {
+    await createAndActivate('Mój pierwszy projekt');
+  };
+
+  const hasProject = activeProjectId !== null && projects.length > 0;
+  const isLoadingProjects = projectsStatus === 'loading';
+
   return (
     <div className="relative h-full w-full">
-      <MapClickHandler onMapReady={handleMapReady} />
+      <MapClickHandler
+        onMapReady={handleMapReady}
+        treeLayer={treeLayer}
+        onTreeClick={handleTreeClick}
+      />
+
       <aside className="pointer-events-none absolute left-4 top-4 max-w-sm space-y-2">
         {isLoading && (
           <Card className="pointer-events-auto">
@@ -103,7 +183,46 @@ export default function MapPage(): JSX.Element {
             </CardContent>
           </Card>
         )}
+        {!hasProject && !isLoadingProjects && projects.length === 0 && (
+          <Card className="pointer-events-auto">
+            <CardContent className="space-y-3 p-4 text-sm text-stone-700">
+              <p>Brak projektu. Utwórz pierwszy projekt, aby zacząć dodawać drzewa.</p>
+              <Button
+                size="sm"
+                variant="primary"
+                data-testid="create-first-project"
+                onClick={() => {
+                  void handleCreateProject();
+                }}
+              >
+                Utwórz projekt
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </aside>
+
+      {hasProject && mode === 'idle' && (
+        <Fab onClick={handleStartPlacing} />
+      )}
+
+      <AddTreePanel
+        gpsPosition={position}
+        gpsLoading={gpsLoading}
+        gpsError={gpsError}
+        onRefreshGps={refresh}
+      />
+
+      {mode === 'placing' || mode === 'editing' ? (
+        <button
+          type="button"
+          aria-label="Anuluj"
+          data-testid="cancel-floating"
+          onClick={cancelTree}
+          className="fixed bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-md bg-stone-100 px-3 py-1 text-xs text-stone-600 shadow hover:bg-stone-200"
+        />
+      ) : null}
+
       <noscript className="absolute inset-0 flex items-center justify-center bg-stone-100 p-4 text-center">
         <p className="text-stone-700">Mapa wymaga włączonej obsługi JavaScript.</p>
       </noscript>

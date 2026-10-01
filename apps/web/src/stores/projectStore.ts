@@ -33,7 +33,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       const projects = await listProjects();
       const currentActive = get().activeProjectId;
-      let nextActive = currentActive;
+      let nextActive: string | null = currentActive;
       if (nextActive !== null) {
         const stillExists = projects.some((p) => p.id === nextActive);
         if (!stillExists) {
@@ -41,10 +41,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }
       }
       if (nextActive === null && projects.length > 0) {
-        const first = projects[0];
-        if (first !== undefined) {
-          nextActive = first.id;
-        }
+        nextActive = projects[0]?.id ?? null;
       }
       set({ projects, activeProjectId: nextActive, status: 'loaded' });
     } catch (err) {
@@ -118,13 +115,10 @@ export async function ensureActiveProject(): Promise<Project | null> {
       return active;
     }
   }
-  if (state.projects.length > 0) {
-    const first = state.projects[0];
-    if (first !== undefined) {
-      state.setActive(first.id);
-      return first;
-    }
+  if (state.projects.length === 0) {
+    return state.createAndActivate('Mój pierwszy projekt');
   }
-  const created = await state.createAndActivate('Mój pierwszy projekt');
-  return created;
+  const first: Project = state.projects[0];
+  state.setActive(first.id);
+  return first;
 }

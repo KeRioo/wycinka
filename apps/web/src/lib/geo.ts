@@ -62,6 +62,6 @@ export function markerSizeForCm(circumference: number, scale: MarkerScale): numb
 
 import { DEFAULT_SPECIES } from '@/db/schema';
 
-const speciesColorMap: Map<string, string> = new Map(
+const speciesColorMap = new Map<string, string>(
   DEFAULT_SPECIES.map((s) => [s.name, s.color]),
 );

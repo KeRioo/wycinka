@@ -10,6 +10,7 @@ interface NavItem {
 const NAV_ITEMS: readonly NavItem[] = [
   { to: '/', label: 'Start' },
   { to: '/map', label: 'Mapa' },
+  { to: '/projects', label: 'Projekty' },
 ];
 
 export default function Header(): JSX.Element {

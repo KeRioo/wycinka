@@ -93,8 +93,9 @@ export default function ArrowPad({
   const repeatRef = useRef<RepeatState>({ timer: null, interval: null });
 
   useEffect(() => {
+    const state = repeatRef.current;
     return () => {
-      clearRepeat(repeatRef.current);
+      clearRepeat(state);
     };
   }, []);
 

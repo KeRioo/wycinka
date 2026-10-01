@@ -3,13 +3,24 @@ import maplibregl, { type Map as MaplibreMap, type MapLayerMouseEvent } from 'ma
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { usePMTiles } from './usePMTiles';
 
+export interface TreeFeatureProperties {
+  id: string;
+  species: string;
+  speciesColor: string;
+  circumference: number;
+  circumferencePx: number;
+  pending?: boolean;
+}
+
 interface MapViewProps {
   pmtilesUrl: string;
   initialCenter?: readonly [number, number];
   initialZoom?: number;
   highlightGeometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
+  treeLayer?: GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null;
   onMapClick?: (point: { lat: number; lng: number }) => void;
   onMapReady?: (map: MaplibreMap) => void;
+  onTreeClick?: (id: string) => void;
   className?: string;
 }
 
@@ -87,18 +98,27 @@ function highlightSourceData(geom: GeoJSON.Polygon | GeoJSON.MultiPolygon): GeoJ
   };
 }
 
+function emptyFeatureCollection(): GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> {
+  return { type: 'FeatureCollection', features: [] };
+}
+
 export default function MapView({
   pmtilesUrl,
   initialCenter = DEFAULT_CENTER,
   initialZoom = DEFAULT_ZOOM,
   highlightGeometry,
+  treeLayer,
   onMapClick,
   onMapReady,
+  onTreeClick,
   className,
 }: MapViewProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
+  const onTreeClickRef = useRef<typeof onTreeClick>(onTreeClick);
   const [styleLoaded, setStyleLoaded] = useState<boolean>(false);
+
+  onTreeClickRef.current = onTreeClick;
 
   usePMTiles(pmtilesUrl);
 
@@ -141,6 +161,68 @@ export default function MapView({
           'line-width': 2,
         },
       });
+
+      map.addSource('trees', {
+        type: 'geojson',
+        data: emptyFeatureCollection(),
+      });
+      map.addLayer({
+        id: 'trees-circle',
+        type: 'circle',
+        source: 'trees',
+        filter: ['!', ['get', 'pending']],
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['get', 'circumferencePx'],
+            6, 6,
+            18, 18,
+          ],
+          'circle-color': ['get', 'speciesColor'],
+          'circle-stroke-color': '#15803d',
+          'circle-stroke-width': 1.5,
+          'circle-opacity': 0.85,
+        },
+      });
+      map.addLayer({
+        id: 'trees-pending-circle',
+        type: 'circle',
+        source: 'trees',
+        filter: ['==', ['get', 'pending'], true],
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['get', 'circumferencePx'],
+            6, 8,
+            18, 16,
+          ],
+          'circle-color': '#dc2626',
+          'circle-stroke-color': '#fef2f2',
+          'circle-stroke-width': 2,
+          'circle-opacity': 0.75,
+        },
+      });
+
+      map.on('click', 'trees-circle', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['trees-circle'] });
+        const first = features[0];
+        const props = first.properties as Record<string, unknown>;
+        const id = props.id;
+        if (typeof id === 'string') {
+          onTreeClickRef.current?.(id);
+        }
+        e.preventDefault();
+      });
+
+      map.on('mouseenter', 'trees-circle', () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'trees-circle', () => {
+        map.getCanvas().style.cursor = '';
+      });
+
       setStyleLoaded(true);
       onMapReady?.(map);
     });
@@ -179,6 +261,18 @@ export default function MapView({
       source.setData({ type: 'FeatureCollection', features: [] });
     }
   }, [highlightGeometry, styleLoaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoaded) {
+      return;
+    }
+    const source = map.getSource<maplibregl.GeoJSONSource>('trees');
+    if (!source) {
+      return;
+    }
+    source.setData(treeLayer ?? emptyFeatureCollection());
+  }, [treeLayer, styleLoaded]);
 
   return <div ref={containerRef} className={className ?? 'h-full w-full'} data-testid="map-container" />;
 }

@@ -229,7 +229,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     return tree;
   },
 
-  selectTreeForEdit: async (id) => {
+  selectTreeForEdit: (id) => {
     const tree = get().trees.find((t) => t.id === id);
     if (tree === undefined) {
       return;

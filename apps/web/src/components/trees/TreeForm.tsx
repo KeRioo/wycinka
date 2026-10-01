@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { DEFAULT_SPECIES } from '@/db/schema';
 import { useTreeStore, treeDraftSchema } from '@/stores/treeStore';
 
@@ -11,6 +11,16 @@ interface TreeFormProps {
   defaultSpecies?: string;
 }
 
+function resolveSpecies(pendingSpecies: string | undefined, defaultSpecies: string | undefined): string {
+  if (pendingSpecies !== undefined && pendingSpecies !== '') {
+    return pendingSpecies;
+  }
+  if (defaultSpecies !== undefined && defaultSpecies !== '') {
+    return defaultSpecies;
+  }
+  return '';
+}
+
 export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element {
   const pending = useTreeStore((s) => s.pending);
   const editingTreeId = useTreeStore((s) => s.editingTreeId);
@@ -18,18 +28,20 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
   const setCircumference = useTreeStore((s) => s.setCircumference);
   const setNotes = useTreeStore((s) => s.setNotes);
 
-  const formKey = editingTreeId ?? (pending !== null ? `placing-${pending.lat.toFixed(6)}-${pending.lng.toFixed(6)}` : 'idle');
+  const formKey =
+    editingTreeId ??
+    (pending !== null ? `placing-${pending.lat.toFixed(6)}-${pending.lng.toFixed(6)}` : 'idle');
 
-  const initialSpecies = pending?.species || defaultSpecies || '';
+  const initialSpecies = resolveSpecies(pending?.species, defaultSpecies);
   const initialCircumference = pending?.circumference ?? 0;
   const initialNotes = pending?.notes ?? '';
 
   const {
-    control,
     register,
     handleSubmit,
     reset,
     trigger,
+    setValue,
     formState: { errors, isValid },
     watch,
   } = useForm<TreeFormValues>({
@@ -43,16 +55,19 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
   });
 
   useEffect(() => {
-    reset(
-      {
-        species: pending?.species || defaultSpecies || '',
-        circumference: pending?.circumference ?? 0,
-        notes: pending?.notes ?? '',
-      },
-      { keepDirty: false, keepTouched: false },
-    );
+    reset({
+      species: resolveSpecies(pending?.species, defaultSpecies),
+      circumference: pending?.circumference ?? 0,
+      notes: pending?.notes ?? '',
+    });
     void trigger();
   }, [formKey, pending, defaultSpecies, reset, trigger]);
+
+  useEffect(() => {
+    if (initialSpecies !== '') {
+      setValue('species', initialSpecies, { shouldDirty: false });
+    }
+  }, [initialSpecies, setValue]);
 
   useEffect(() => {
     const sub = watch((values) => {
@@ -71,14 +86,26 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
         setNotes(notesValue);
       }
     });
-    return () => sub.unsubscribe();
-  }, [watch, setSpecies, setCircumference, setNotes, pending?.species, pending?.circumference, pending?.notes]);
+    return () => {
+      sub.unsubscribe();
+    };
+  }, [
+    watch,
+    setSpecies,
+    setCircumference,
+    setNotes,
+    pending?.species,
+    pending?.circumference,
+    pending?.notes,
+  ]);
 
   return (
     <form
       data-testid="tree-form"
       className="space-y-3"
-      onSubmit={handleSubmit(() => undefined)}
+      onSubmit={handleSubmit(() => {
+        // validation-only; actual save handled by panel button
+      })}
     >
       <div>
         <label
@@ -87,29 +114,21 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
         >
           Gatunek
         </label>
-        <Controller
-          control={control}
-          name="species"
-          render={({ field }) => (
-            <select
-              id="tree-species"
-              data-testid="tree-species"
-              ref={field.ref}
-              value={field.value}
-              onChange={(e) => field.onChange(e.target.value)}
-              onBlur={field.onBlur}
-              aria-invalid={errors.species !== undefined}
-              className="block h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-base focus:border-forest-500 focus:outline-none focus:ring-2 focus:ring-forest-500"
-            >
-              <option value="">-- wybierz --</option>
-              {DEFAULT_SPECIES.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          )}
-        />
+        <select
+          id="tree-species"
+          data-testid="tree-species"
+          aria-invalid={errors.species !== undefined}
+          className="block h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-base focus:border-forest-500 focus:outline-none focus:ring-2 focus:ring-forest-500"
+          defaultValue={initialSpecies}
+          {...register('species')}
+        >
+          <option value="">-- wybierz --</option>
+          {DEFAULT_SPECIES.map((s) => (
+            <option key={s.name} value={s.name}>
+              {s.name}
+            </option>
+          ))}
+        </select>
         {errors.species !== undefined && (
           <p data-testid="tree-species-error" className="mt-1 text-xs text-red-700">
             {errors.species.message}
