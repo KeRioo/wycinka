@@ -37,7 +37,6 @@ export default function MapPage(): JSX.Element {
   const trees = useTreeStore((s) => s.trees);
   const loadTrees = useTreeStore((s) => s.loadTrees);
   const startPlacing = useTreeStore((s) => s.startPlacing);
-  const cancelTree = useTreeStore((s) => s.cancel);
   const activeProjectIdFromTree = useTreeStore((s) => s.activeProjectId);
 
   const { position, error: gpsError, loading: gpsLoading, refresh } = useGeolocation();
@@ -209,16 +208,6 @@ export default function MapPage(): JSX.Element {
         gpsError={gpsError}
         onRefreshGps={refresh}
       />
-
-      {mode === 'placing' || mode === 'editing' ? (
-        <button
-          type="button"
-          aria-label="Anuluj"
-          data-testid="cancel-floating"
-          onClick={cancelTree}
-          className="fixed bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-md bg-stone-100 px-3 py-1 text-xs text-stone-600 shadow hover:bg-stone-200"
-        />
-      ) : null}
 
       <noscript className="absolute inset-0 flex items-center justify-center bg-stone-100 p-4 text-center">
         <p className="text-stone-700">Mapa wymaga włączonej obsługi JavaScript.</p>

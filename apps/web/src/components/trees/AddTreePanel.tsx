@@ -89,7 +89,9 @@ export default function AddTreePanel({
         className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-stone-200 bg-white shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-          <h2 className="text-lg font-semibold text-forest-900">Dodaj drzewo</h2>
+          <h2 className="text-lg font-semibold text-forest-900">
+            {mode === 'editing' ? 'Edytuj drzewo' : 'Dodaj drzewo'}
+          </h2>
           <button
             type="button"
             aria-label="Anuluj dodawanie drzewa"
@@ -136,7 +138,7 @@ export default function AddTreePanel({
               onClick={handleSave}
               disabled={!formValid}
             >
-              Zapisz
+              {mode === 'editing' ? 'Zapisz zmiany' : 'Zapisz'}
             </Button>
           </div>
         </div>
