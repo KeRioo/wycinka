@@ -65,8 +65,11 @@ Zwraca działkę, w której obrysie znajduje się punkt.
     "teryt": "141201_1.0001.6509",
     "number": "6509",
     "voivodeship": "mazowieckie",
+    "voivodeship_code": "14",
     "county": "Warszawa",
+    "county_code": "1201",
     "commune": "Śródmieście",
+    "commune_code": "141201",
     "region": "0001",
     "region_name": "Obręb 0001",
     "area_m2": 1234.56,
@@ -77,7 +80,8 @@ Zwraca działkę, w której obrysie znajduje się punkt.
     },
     "bbox": [min_lng, min_lat, max_lng, max_lat],
     "centroid": [lng, lat],
-    "fetched_at": "2026-09-29T03:00:00Z"
+    "fetched_at": "2026-09-29T03:00:00Z",
+    "datasource": "geoportal.gov.pl"
   }
 }
 ```
@@ -87,24 +91,34 @@ Zwraca działkę, w której obrysie znajduje się punkt.
 200 OK
 {
   "found": false,
-  "nearby_parcels": [                  // opcjonalnie: 5 najbliższych
-    { "id": "...", "distance_m": 12.3 }
-  ]
+  "nearby_parcels": []                // zawsze pusty w obecnej wersji (TODO)
 }
 ```
 
 **Błędy:**
-- `400`: `lat`/`lng` poza zakresem
-- `503`: baza niedostępna (powrót do health=`down`)
+- `400`: `lat`/`lng` poza zakresem (FastAPI `Query(ge=-90, le=90)`)
+- `503`: baza niedostępna (gdy plik SQLite nie istnieje lub R-tree nie działa)
 
 ### `GET /api/v1/parcel/{teryt}`
 
 Zwraca działkę po identyfikatorze TERYT.
 
 **Path param:**
-- `teryt`: format `WWPPGG_R.OOOO.NR_DZ`, np. `141201_1.0001.6509`
+- `teryt`: format `WWPPGG_R.OOOO.NR_DZ`, regex `^\d{6}_[1-5]\.\d{4}\.[0-9A-Za-z/\-.]+$`
+- Przykład: `141201_1.0001.6509`
 
-**Odpowiedź:** jak wyżej (bez `found: true`).
+**Odpowiedź (znaleziono):**
+```http
+200 OK
+{
+  "parcel": { ... }                  // ten sam Parcel co wyżej, BEZ envelope { found, parcel }
+}
+```
+
+**Błędy:**
+- `422 INVALID_TERYT`: TERYT nie pasuje do regex
+- `404 PARCEL_NOT_FOUND`: działka o podanym TERYT nie istnieje
+- `503 DB_UNAVAILABLE`: baza niedostępna
 
 ### `GET /api/v1/parcel/aggregate?id={id1,id2,...}`
 
@@ -226,14 +240,17 @@ const map = new maplibregl.Map({
 }
 ```
 
-| HTTP | Code | Znaczenie |
-|---|---|---|
-| 400 | `BAD_REQUEST` | Walidacja parametrów |
-| 404 | `PARCEL_NOT_FOUND` | Brak działki dla podanych kryteriów |
-| 422 | `INVALID_TERYT` | Zły format TERYT |
-| 503 | `DB_UNAVAILABLE` | Baza niedostępna |
-| 503 | `PMTILES_UNAVAILABLE` | Plik PMTiles nie załadowany |
-| 500 | `INTERNAL_ERROR` | Nieoczekiwany błąd |
+| HTTP | Code | Znaczenie | Które endpointy |
+|---|---|---|---|
+| 400 | `BAD_REQUEST` | Walidacja parametrów (np. za dużo ID) | `/parcel`, `/parcel/aggregate`, `/search` |
+| 404 | `PARCEL_NOT_FOUND` | Działka nie istnieje dla podanego TERYT | `/parcel/{teryt}`, `/parcel/aggregate` |
+| 416 | `BAD_REQUEST` | Range header nieparsowalny | `/pmtiles/dzialki` |
+| 422 | `INVALID_TERYT` | TERYT nie pasuje do regex | `/parcel/{teryt}`, `/parcel/aggregate` |
+| 429 | `RATE_LIMITED` | Przekroczono rate limit | (konfigurowane w reverse proxy) |
+| 500 | `INTERNAL_ERROR` | Nieoczekiwany błąd | wszystkie |
+| 503 | `DB_UNAVAILABLE` | Baza SQLite nie istnieje lub błąd | wszystkie |
+| 503 | `PMTILES_UNAVAILABLE` | Plik PMTiles nie istnieje lub ma 0 bajtów | `/pmtiles/dzialki` |
+| 504 | `GATEWAY_TIMEOUT` | Timeout upstream | (reverse proxy) |
 
 ---
 
@@ -253,7 +270,15 @@ const map = new maplibregl.Map({
 
 ---
 
-## 8. Przykłady curl
+## 8. Uwagi implementacyjne
+
+- **`/parcel?lat&lng` zwraca 200 + `{"found": false}`** — nawet gdy nic nie znaleziono. Jest to flow „interactive map", więc brak wyniku nie jest błędem.
+- **`/parcel/{teryt}` zwraca 404** gdy działka nie istnieje — TERYT jest identyfikatorem, więc brak jest błędem.
+- **CORS:** backend ustawia `Access-Control-Allow-Origin` z `cors_allow_origins` (domyślnie `*`). W produkcji ustawić na konkretną domenę.
+- **Range requests dla PMTiles:** backend honoruje `Range: bytes=START-END`, `Range: bytes=START-`, `Range: bytes=-SUFFIX`. Zwraca `416` dla nieparsowalnego lub niespełnialnego range.
+- **ETag dla PMTiles:** hash pliku (mtime + size). Frontend może używać `If-None-Match` do warunkowego cache'owania.
+
+## 9. Przykłady curl
 
 ```bash
 # Health
