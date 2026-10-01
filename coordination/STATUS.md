@@ -102,6 +102,129 @@ Branch: `feat/backend-scaffold`
 
 ---
 
+## Frontend (FAB + trees, branch `feat/frontend-fab-trees`)
+
+- [x] **`src/lib/geo.ts`** — `offsetMeters`, `haversineMeters`, `classifyAccuracy`
+      (dobra/średnia/słaba), `formatLatLng` (NS/EW), `getSpeciesColor`,
+      `markerSizeForCm` (z `MarkerScale`). Własny haversine, bez turf.
+- [x] **`src/stores/projectStore.ts`** — Zustand: `loadProjects`, `setActive`,
+      `createAndActivate`, `deleteProject` (kaskadowe usuwanie drzew),
+      `clear`, `getActive`. Auto-selekcja pierwszego projektu + helpery
+      `ensureProjectsLoaded` / `ensureActiveProject`.
+- [x] **`src/stores/treeStore.ts`** — Zustand: `mode: idle|placing|editing`,
+      `pending: TreeDraft`, `trees`, `loadTrees`, `startPlacing`,
+      `cancel`, `setSpecies`, `setCircumference`, `setNotes`, `nudge` (kumuluje
+      dx/dy), `useGps` (reset offsetu), `save` (z walidacją zod), `selectTreeForEdit`,
+      `updateTree`, `deleteTree`. Schemat `treeDraftSchema` w zod.
+- [x] **`src/db/schema.ts`** — nowy `TreeUpdate` + `updateTree` helper.
+- [x] **`src/components/trees/GpsIndicator.tsx`** — lat/lng, accuracy badge
+      (good/medium/poor w kolorach forest/amber/red), refresh button,
+      obsługa loading/error.
+- [x] **`src/components/trees/ArrowPad.tsx`** — 4 strzałki (krok 0.25 m),
+      center "📍 Użyj GPS" (opcjonalny), hold-to-repeat (350 ms delay,
+      110 ms interval), status `Przesunięcie: +dx m / dy m`.
+- [x] **`src/components/trees/TreeForm.tsx`** — react-hook-form + zod resolver.
+      Select gatunku, input obwodu (1–1000 cm, krok 0.1), textarea notatek
+      (max 500). Dwukierunkowa sync ze storem.
+- [x] **`src/components/trees/Fab.tsx`** — pulsing FAB z framer-motion,
+      aria-label="Dodaj drzewo".
+- [x] **`src/components/trees/AddTreePanel.tsx`** — slide-up panel (spring
+      damping 25, stiffness 200): nagłówek "Dodaj drzewo", GpsIndicator,
+      wyświetlacz pozycji pending, ArrowPad, TreeForm, Anuluj/Zapisz.
+      Sekwencja GPS-only przy starcie (draft bez GPS seeduje się z GPS gdy
+      pozycja dostępna). Save jest disabled gdy formularz niepoprawny.
+- [x] **`src/components/trees/TreeMarkers.tsx`** — `treeToFeature`,
+      `treesToFeatureCollection`, `buildPendingFeature` (czerwony pulsing).
+- [x] **`src/components/map/MapView.tsx`** — nowe propy: `treeLayer`
+      (GeoJSON FeatureCollection) + `onTreeClick`. Warstwy `trees-circle`
+      (drzewa) + `trees-pending-circle` (czerwony pulsing) z ekspresją
+      `interpolate(['linear'], ['get','circumferencePx'], ...)`. Cursor pointer
+      na hover. Source `trees` aktualizowany reaktywnie przez `useEffect`.
+- [x] **`src/components/map/MapClickHandler.tsx`** — przekazuje `treeLayer` i
+      `onTreeClick` do `MapView`.
+- [x] **`src/pages/ProjectsPage.tsx`** — nowa strona `/projects`: lista
+      projektów (nazwa, data), "+ Nowy projekt", potwierdzenie usunięcia
+      (dialog), aktywny projekt wyróżniony ringiem.
+- [x] **`src/pages/MapPage.tsx`** — integracja: `useProjectStore` +
+      `useTreeStore` + `useGeolocation`. Prompt "Brak projektu" z CTA gdy brak
+      projektu. FAB pojawia się gdy `mode === 'idle'`. Panel AddTree podpięty.
+      TreeLayer budowany z `pending` gdy `mode !== 'idle'`, inaczej same
+      `trees`.
+- [x] **`src/components/layout/Header.tsx`** — dodany link "Projekty" → `/projects`.
+- [x] **`src/App.tsx`** — nowy route `/projects` → `ProjectsPage`.
+- [x] **`tests/e2e/playwright.config.ts`** — `testDir: '.'` + `testMatch: '*.spec.ts'`,
+      `npm run test:e2e` wskazuje na `tests/e2e/playwright.config.ts`.
+- [x] **Testy jednostkowe:**
+    - `geo.test.ts` (22 testy): offset roundtrip, haversine correctness
+      (zero/sym/Warszawa–Łódź), classifyAccuracy (granice + NaN/-inf),
+      formatLatLng (N/S/E/W), getSpeciesColor (znany/nieznany/case-sensitive),
+      markerSizeForCm (zero/środek/max/negative).
+    - `projectStore.test.ts` (12): empty start, loadProjects, auto-select,
+      setActive, createAndActivate, deleteProject + cascade trees,
+      reassignment active, clear, error path, persist active.
+    - `treeStore.test.ts` (23): idle start, startPlacing (GPS/centroid/prefer GPS),
+      cancel, setSpecies/Circumference/Notes/empty notes, nudge (kumulacja),
+      useGps reset offset, save (Dexie write + reset state), save z offsetem,
+      save bez pending, save z niepoprawnymi danymi, loadTrees, deleteTree,
+      selectTreeForEdit (populate pending), edit+save update, clear.
+    - `GpsIndicator.test.tsx` (7): pozycja + accuracy, medium/poor badges,
+      loading, error, refresh button, brak onRefresh.
+    - `ArrowPad.test.tsx` (11): wszystkie 4 strzałki, custom step, repeat-on-hold
+      (fake timers), use-GPS, status display.
+    - `TreeForm.test.tsx` (8): render pól, species error, circumference 0
+      error, sync species/circumference/notes, prefill z pending, defaultSpecies.
+    - `AddTreePanel.test.tsx` (11): brak renderu idle, render placing,
+      Anuluj/Zapisz buttons, disable przy braku species/circumference,
+      enable przy poprawnym, cancel (button i close), save z reset state,
+      pending position z offsetem, GPS error.
+    - `Fab.test.tsx` (4): domyślny label, custom label, onClick, custom className.
+    - `ProjectsPage.test.tsx` (8): tytuł + new project, empty state, lista,
+      create + navigate, select + navigate, confirm dialog, cancel delete,
+      confirm delete.
+    - `MapPage.test.tsx` — istniejące (5 testów) nadal zielone.
+- [x] **Testy E2E (Playwright):**
+    - `trees.spec.ts` (3): full flow z arrow nudges + zapis + reload, cancel bez
+      zapisu, disable save przy invalid form. Mockowane `navigator.geolocation`
+      (52.2297, 21.0122, acc 8 m) i backend API.
+- [x] `npm run typecheck` — czysto
+- [x] `npm run lint` — czysto (0 warnings/errors)
+- [x] `npm run test:coverage` — **82.72% lines / 83.84% funcs / 83.81% branches**
+      (baseline 86.63% / 90.32% / 79.11% — wzrost na branches, lekkie
+      obniżenie na lines/funcs przez nowe UI components — patrz "Open issues")
+- [x] `npm run build` — sukces (PWA precache 19 entries, PWA + map bundle)
+- [x] `npm run test:e2e` — **8/8 pass** (5 istniejących + 3 nowe)
+
+**Branch:** `feat/frontend-fab-trees`
+**Commits:** 6 atomowych commitów
+**Pliki:** 17 created, 8 modified
+**Testy:** 8 unit + 3 e2e nowe = 11 nowych; łącznie **183 unit pass** + **8 e2e pass**
+
+### Open issues / TODO (dla kolejnych agentów)
+
+- **Coverage spadek na lines/funcs** — `MapView.tsx` (49%) i `TreeMarkers.tsx`
+  (28%) są słabo pokryte bo testy mockują `maplibregl.Map` zamiast realnej
+  instancji. Pokrycie ścieżek `treeLayer`/`onTreeClick` można podnieść
+  integrowanym testem komponentu lub uruchomieniem `MapView` z renderowanym
+  canvasem. Realna wartość tych plików jest wysoka (integration + e2e to
+  łapie), ale vitest coverage ich nie widzi.
+- **Edit drzewa przez klik** — `selectTreeForEdit` jest podpięty do kliknięcia
+  markera, ale panel `AddTreePanel` ma tytuł "Dodaj drzewo" niezależnie od
+  trybu. W trybie edycji (`mode === 'editing'`) panel nie pokazuje jeszcze
+  dedykowanego tytułu / zachowania; zapis aktualizuje istniejące drzewo
+  (logika w `treeStore.save`), ale UX jeszcze do dopracowania.
+- **Sync initial species z pendingu** — formularz ma `defaultValue` z `pending`,
+  ale po zmianie pending przez strzałki (useGps, offset) w trakcie sesji
+  formularz jest resetowany (patrz `formKey`). Działa, ale UX-owo warto to
+  sprawdzić w PWA.
+- **Marker click → popup drzewa** — kliknięcie markera włącza tryb edycji, ale
+  nie pokazuje popupu z metadanymi drzewa (gatunek, obwód, data). Do dodania
+  w następnym kroku.
+- **Lazy-load mapy** — wciąż w TODO.
+- **Prawdziwe PNG ikony PWA** — wciąż w TODO.
+- **Kreator PDF** — wciąż w TODO.
+
+---
+
 ## Infra (`infra/`, branch `feat/infra-scaffold`)
 
 - [x] `docker-compose.yml` — produkcja (api, web, caddy, cloudflared)
