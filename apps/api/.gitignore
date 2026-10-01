@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage/
+*.sqlite
+*.sqlite-journal
+data/
+# Tests need a sample SQLite + PMTiles to be reproducible
+!tests/fixtures/parcels_sample.sqlite
+!tests/fixtures/poland_sample.pmtiles
