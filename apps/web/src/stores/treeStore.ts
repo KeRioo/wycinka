@@ -44,6 +44,10 @@ interface TreeState {
   trees: Tree[];
   activeProjectId: string | null;
   editingTreeId: string | null;
+  selectedTreeId: string | null;
+  listPanelOpen: boolean;
+  setSelectedTreeId: (id: string | null) => void;
+  setListPanelOpen: (open: boolean) => void;
   loadTrees: (projectId: string) => Promise<void>;
   startPlacing: (args?: StartPlacingArgs) => void;
   cancel: () => void;
@@ -85,6 +89,16 @@ export const useTreeStore = create<TreeState>((set, get) => ({
   trees: [],
   activeProjectId: null,
   editingTreeId: null,
+  selectedTreeId: null,
+  listPanelOpen: false,
+
+  setSelectedTreeId: (id) => {
+    set({ selectedTreeId: id });
+  },
+
+  setListPanelOpen: (open) => {
+    set({ listPanelOpen: open });
+  },
 
   loadTrees: async (projectId) => {
     const trees = await listTrees(projectId);
@@ -276,6 +290,8 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     await deleteTreeFromDb(id);
     set((state) => ({
       trees: state.trees.filter((t) => t.id !== id),
+      selectedTreeId: state.selectedTreeId === id ? null : state.selectedTreeId,
+      editingTreeId: state.editingTreeId === id ? null : state.editingTreeId,
     }));
   },
 
@@ -286,6 +302,8 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       trees: [],
       activeProjectId: null,
       editingTreeId: null,
+      selectedTreeId: null,
+      listPanelOpen: false,
     });
   },
 }));

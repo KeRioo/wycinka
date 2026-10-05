@@ -20,7 +20,7 @@ interface MapViewProps {
   treeLayer?: GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null;
   onMapClick?: (point: { lat: number; lng: number }) => void;
   onMapReady?: (map: MaplibreMap) => void;
-  onTreeClick?: (id: string) => void;
+  onTreeClick?: (id: string, lngLat: { lng: number; lat: number }) => void;
   className?: string;
 }
 
@@ -56,6 +56,14 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
         type: 'vector',
         url: `pmtiles://${pmtilesUrl}`,
       },
+      trees: {
+        type: 'geojson',
+        data: emptyFeatureCollection(),
+      },
+      highlight: {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      },
     },
     layers: [
       ...BASE_STYLE.layers,
@@ -79,6 +87,62 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
           'line-color': '#15803d',
           'line-width': 0.5,
           'line-opacity': 0.7,
+        },
+      },
+      {
+        id: 'highlight-fill',
+        type: 'fill',
+        source: 'highlight',
+        paint: {
+          'fill-color': '#facc15',
+          'fill-opacity': 0.4,
+        },
+      },
+      {
+        id: 'highlight-outline',
+        type: 'line',
+        source: 'highlight',
+        paint: {
+          'line-color': '#ca8a04',
+          'line-width': 2,
+        },
+      },
+      {
+        id: 'trees-circle',
+        type: 'circle',
+        source: 'trees',
+        filter: ['!=', ['get', 'pending'], true],
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['get', 'circumferencePx'],
+            6, 6,
+            18, 18,
+          ],
+          'circle-color': ['get', 'speciesColor'],
+          'circle-stroke-color': '#15803d',
+          'circle-stroke-width': 1.5,
+          'circle-opacity': 0.85,
+        },
+      },
+      {
+        id: 'trees-pending-circle',
+        type: 'circle',
+        source: 'trees',
+        filter: ['==', ['get', 'pending'], true],
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['get', 'circumferencePx'],
+            6, 8,
+            18, 16,
+          ],
+          'circle-color': '#dc2626',
+          'circle-stroke-color': '#fef2f2',
+          'circle-stroke-width': 2,
+          'circle-opacity': 0.75,
         },
       },
     ],
@@ -139,79 +203,18 @@ export default function MapView({
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
     map.on('load', () => {
-      map.addSource('highlight', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'highlight-fill',
-        type: 'fill',
-        source: 'highlight',
-        paint: {
-          'fill-color': '#facc15',
-          'fill-opacity': 0.4,
-        },
-      });
-      map.addLayer({
-        id: 'highlight-outline',
-        type: 'line',
-        source: 'highlight',
-        paint: {
-          'line-color': '#ca8a04',
-          'line-width': 2,
-        },
-      });
-
-      map.addSource('trees', {
-        type: 'geojson',
-        data: emptyFeatureCollection(),
-      });
-      map.addLayer({
-        id: 'trees-circle',
-        type: 'circle',
-        source: 'trees',
-        filter: ['!', ['get', 'pending']],
-        paint: {
-          'circle-radius': [
-            'interpolate',
-            ['linear'],
-            ['get', 'circumferencePx'],
-            6, 6,
-            18, 18,
-          ],
-          'circle-color': ['get', 'speciesColor'],
-          'circle-stroke-color': '#15803d',
-          'circle-stroke-width': 1.5,
-          'circle-opacity': 0.85,
-        },
-      });
-      map.addLayer({
-        id: 'trees-pending-circle',
-        type: 'circle',
-        source: 'trees',
-        filter: ['==', ['get', 'pending'], true],
-        paint: {
-          'circle-radius': [
-            'interpolate',
-            ['linear'],
-            ['get', 'circumferencePx'],
-            6, 8,
-            18, 16,
-          ],
-          'circle-color': '#dc2626',
-          'circle-stroke-color': '#fef2f2',
-          'circle-stroke-width': 2,
-          'circle-opacity': 0.75,
-        },
-      });
-
       map.on('click', 'trees-circle', (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ['trees-circle'] });
-        const first = features[0];
+        const first = features.length > 0 ? features[0] : undefined;
+        if (first === undefined) {
+          e.preventDefault();
+          return;
+        }
         const props = first.properties as Record<string, unknown>;
         const id = props.id;
         if (typeof id === 'string') {
-          onTreeClickRef.current?.(id);
+          const [lng, lat] = (first.geometry as GeoJSON.Point).coordinates;
+          onTreeClickRef.current?.(id, { lng, lat });
         }
         e.preventDefault();
       });
@@ -274,5 +277,12 @@ export default function MapView({
     source.setData(treeLayer ?? emptyFeatureCollection());
   }, [treeLayer, styleLoaded]);
 
-  return <div ref={containerRef} className={className ?? 'h-full w-full'} data-testid="map-container" />;
+  return (
+    <div
+      ref={containerRef}
+      className={className ?? 'h-full w-full'}
+      data-testid="map-container"
+      data-loaded={styleLoaded ? 'true' : 'false'}
+    />
+  );
 }
