@@ -202,6 +202,60 @@ describe('useTreeStore', () => {
     expect(useTreeStore.getState().trees).toHaveLength(0);
   });
 
+  it('should setSelectedTreeId update selected tree id', () => {
+    useTreeStore.getState().setSelectedTreeId('t1');
+    expect(useTreeStore.getState().selectedTreeId).toBe('t1');
+    useTreeStore.getState().setSelectedTreeId(null);
+    expect(useTreeStore.getState().selectedTreeId).toBeNull();
+  });
+
+  it('should setListPanelOpen toggle the list panel', () => {
+    expect(useTreeStore.getState().listPanelOpen).toBe(false);
+    useTreeStore.getState().setListPanelOpen(true);
+    expect(useTreeStore.getState().listPanelOpen).toBe(true);
+    useTreeStore.getState().setListPanelOpen(false);
+    expect(useTreeStore.getState().listPanelOpen).toBe(false);
+  });
+
+  it('should clear selectedTreeId and editingTreeId when deleting the selected tree', async () => {
+    const project = await createProject({ name: 'P' });
+    const t = await addTree({
+      projectId: project.id,
+      lat: 52.23,
+      lng: 21.01,
+      species: 'Dąb',
+      circumference: 50,
+    });
+    await useTreeStore.getState().loadTrees(project.id);
+    useTreeStore.getState().setSelectedTreeId(t.id);
+    await useTreeStore.getState().selectTreeForEdit(t.id);
+    await useTreeStore.getState().deleteTree(t.id);
+    expect(useTreeStore.getState().selectedTreeId).toBeNull();
+    expect(useTreeStore.getState().editingTreeId).toBeNull();
+  });
+
+  it('should keep selectedTreeId when deleting a different tree', async () => {
+    const project = await createProject({ name: 'P' });
+    const t1 = await addTree({
+      projectId: project.id,
+      lat: 52.23,
+      lng: 21.01,
+      species: 'Dąb',
+      circumference: 50,
+    });
+    const t2 = await addTree({
+      projectId: project.id,
+      lat: 52.24,
+      lng: 21.02,
+      species: 'Buk',
+      circumference: 60,
+    });
+    await useTreeStore.getState().loadTrees(project.id);
+    useTreeStore.getState().setSelectedTreeId(t2.id);
+    await useTreeStore.getState().deleteTree(t1.id);
+    expect(useTreeStore.getState().selectedTreeId).toBe(t2.id);
+  });
+
   it('should selectTreeForEdit populate pending from existing tree', async () => {
     const project = await createProject({ name: 'P' });
     const t = await addTree({
@@ -249,9 +303,13 @@ describe('useTreeStore', () => {
 
   it('should clear state', () => {
     useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    useTreeStore.getState().setSelectedTreeId('t1');
+    useTreeStore.getState().setListPanelOpen(true);
     useTreeStore.getState().clear();
     expect(useTreeStore.getState().mode).toBe('idle');
     expect(useTreeStore.getState().pending).toBeNull();
     expect(useTreeStore.getState().trees).toEqual([]);
+    expect(useTreeStore.getState().selectedTreeId).toBeNull();
+    expect(useTreeStore.getState().listPanelOpen).toBe(false);
   });
 });
