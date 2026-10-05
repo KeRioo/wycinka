@@ -288,3 +288,27 @@ Branch: `feat/backend-scaffold`
 - Pliki `apps/`, `infra/`, `scripts/` są kompletne i przetestowane.
 - Brak środowiska Docker na dev PC — testy E2E i integracja odłożone.
 - Następne kroki: implementacja funkcji (FAB, PDF, drzewa) na bazie istniejących scaffoldów.
+
+---
+
+## Frontend (TreeListPanel + marker popup) — branch feat/frontend-tree-list-popup
+
+- [x] TreeListPanel.tsx (right drawer: list, species color dot, circumference, date, edit/delete)
+- [x] TreePopup.tsx (maplibre popup on marker click: details + Edytuj + Usuń)
+- [x] MapView refactor: trees/highlight sources+layers moved into static style (fixes tree-layer rendering)
+- [x] treeStore: selectedTreeId + listPanelOpen (+ delete clears them)
+- [x] MapPage integration: list toggle button, marker popup, flyTo on list selection
+- [x] E2E tree-list.spec.ts (4 scenarios)
+- [x] Fix (znaleziony w E2E): `trees-circle` filter `['!', ['get','pending']]` — maplibre-gl 4.7.1
+      ocenia `!` na brakującej własności jako `false`, więc zapisane drzewa NIE renderowały się na mapie.
+      Zmienione na `['!=', ['get','pending'], true]` (zweryfikowane empirycznie per-layer queryRenderedFeatures).
+- Coverage: **90.07% lines / 86.01% functions / 86.49% branches** (vitest v8, threshold ≥80% zaliczony)
+- Build: typecheck/lint/build clean; **212/212 unit tests pass**; E2E tree-list **4/4 pass**
+- Commits: `d0167f9` (feat), `f90e7e7` (test) — nie mergowane do main
+
+### TODO (resztki)
+
+- `coverage/` + `test-results/` na Windows/OneDrive dają `EPERM rmdir ...\.tmp` po coverage/e2e —
+  raporty generują się poprawnie, tylko cleanup katalogu tymczasowego się nie udaje (kosmetyka).
+- E2E `tree-list.spec.ts` nie mockuje `/api/v1/parcel` — kliknięcie mapy poza markerem daje toast
+  "Failed to fetch" (oczekiwane bez backendu; nie wpływa na asercje).
