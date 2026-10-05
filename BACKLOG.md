@@ -1,7 +1,7 @@
 # BACKLOG — wycinka.app
 
 > **Aktualizowane przez nadzorcę.** Snapshot stanu projektu, znalezione problemy i kolejne kamienie milowe.
-> Ostatnia aktualizacja: 2026-10-01 (po merge FAB + drzewa).
+> Ostatnia aktualizacja: 2026-10-01 (po merge TreeListPanel + marker popup).
 >
 > **Przeczytaj najpierw:** `README.md` → `AGENTS.md` → `PLAN.md` → `coordination/STATUS.md`.
 
@@ -14,7 +14,7 @@
 | Moduł | Co dostarczone | Coverage | Testy |
 |---|---|---|---|
 | **Backend** (`apps/api/`) | FastAPI + async aiosqlite + R-tree map pattern + WKT parser (hypothesis) + PMTiles Range/ETag/CORS | 86% | 55/55 ✓ |
-| **Frontend** (`apps/web/`) | Vite+React+TS strict + ky + MapLibre PMTiles + Dexie schema + FAB + tree capture flow + 17 gatunków PL | 82.7% | 183/183 ✓ |
+| **Frontend** (`apps/web/`) | Vite+React+TS strict + ky + MapLibre PMTiles + Dexie + FAB + tree capture + TreeListPanel + marker popup + 17 gatunków PL | 90.1% | 212/212 ✓ |
 | **Infra** (`infra/`) | docker-compose prod+dev, Caddy z PMTiles Range, nginx alt, cloudflared config, scripts | — | 31/33 (2 skipped — brak docker/caddy CLI) |
 | **ETL** (`scripts/sync-egib/`) | Downloader+merger+pmtiles_gen+sqlite_loader+pipeline (atomicity/rollback)+CLI | 93.9% | 143/143 ✓ |
 | **Docs** | `docs/api-contract.md` + `docs/data-schema.md` zsynchronizowane z implementacją (commit `2bebd98`) | — | — |
@@ -32,6 +32,14 @@ Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
 
 ## 2. Znalezione problemy (do adresu)
 
+### ✅ Resolwione (dla historii)
+
+| # | Problem | Rozwiązanie |
+|---|---|---|
+| — | **Tree-layer nie renderował się** — filter `['!', ['get','pending']]` w maplibre-gl 4.7.1 ewaluuje `!` na *brakującej* właściwości jako `false`, więc zapisane drzewa w ogóle się nie rysowały | Zmieniono na `['!=', ['get','pending'], true]` (`MapView.tsx`). Wykryte przez E2E marker-click. |
+| 4 | **TreeListPanel** brak | Dostarczony (`TreeListPanel.tsx` + toggle button + store state) |
+| 5 | **Popup markera** brak | Dostarczony (`TreePopup.tsx` w maplibre Popup, Edytuj/Usuń) |
+
 ### 🔴 Wysoki priorytet
 
 | # | Problem | Gdzie | Co zrobić |
@@ -44,8 +52,6 @@ Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
 
 | # | Problem | Gdzie | Co zrobić |
 |---|---|---|---|
-| 4 | **TreeListPanel** nie istnieje — brak listy drzew w projekcie (drzewa widoczne tylko jako markery) | `apps/web/src/pages/MapPage.tsx` lub osobny panel | Nowy `TreeListPanel.tsx` z listą: gatunek, obwód, data; click → edit mode; swipe/btn → delete |
-| 5 | **Popup markera** — klik markera wchodzi w edit mode, ale brak popupu z podsumowaniem (gatunek, obwód, data, lokalizacja) | `apps/web/src/components/map/MapView.tsx` + `apps/web/src/components/trees/TreePopup.tsx` (nowy) | Nowy `TreePopup` podobny do `ParcelPopup`, renderowany w maplibre Popup z `e.features[0]` |
 | 6 | **Prawdziwe PNG ikony PWA** — są SVG placeholdery (192×192, 512×512) | `apps/web/public/icons/` | Designer/agent UI: wyeksportować PNG z figmy lub zamienić SVG → PNG (sharp, pngcrush) |
 
 ### 🟢 Niski priorytet (nice-to-have)
@@ -61,11 +67,10 @@ Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
 
 ## 3. Następne kamienie milowe (z PLAN.md)
 
-### Milestone 4 — TreeListPanel + marker popup
-- **Estymata:** 1-2h
-- **Scope:** issues #4, #5
-- **Agent:** frontend
-- **Branch:** `feat/frontend-tree-list-popup`
+### ✅ Milestone 4 — TreeListPanel + marker popup (DOSTARCZONE 2026-10-01)
+- Dostarczone: `TreeListPanel.tsx` (drawer z listą: gatunek/obwód/data + edytuj/usuń), `TreePopup.tsx` (popup w maplibre), toggle button, `treeStore` state (`selectedTreeId`, `listPanelOpen`), fix tree-layer rendering filter.
+- Testy: 4 E2E (`tree-list.spec.ts`), 212 unit. Coverage 90.1%.
+- Commit: merge `0e40999` → main.
 
 ### Milestone 5 — Kreator PDF
 - **Estymata:** 4-6h
@@ -158,7 +163,7 @@ cd "C:\Users\mateusz.przybyl\OneDrive - Polska Agencja Żeglugi Powietrznej\Doku
 # Frontend
 cd apps/web
 npm install
-npm test                    # 183 unit
+npm test                    # 212 unit
 npm run test:coverage       # coverage (OneDrive może rzucić EPERM — zignoruj)
 npm run test:e2e            # Playwright
 npm run typecheck
@@ -196,4 +201,4 @@ python -m egib_sync --help  # CLI
 
 ---
 
-**Kolejny krok:** Milestone 4 (TreeListPanel + marker popup) — szybka wygrana UX, ~1-2h.
+**Kolejny krok:** Milestone 5 (Kreator PDF) — główna funkcja eksportu, ~4-6h. Branch `feat/frontend-pdf`.
