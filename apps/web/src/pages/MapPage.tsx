@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl';
+import { List } from 'lucide-react';
 import MapClickHandler from '@/components/map/MapClickHandler';
 import ParcelPopup from '@/components/map/ParcelPopup';
 import AddTreePanel from '@/components/trees/AddTreePanel';
 import Fab from '@/components/trees/Fab';
+import TreeListPanel from '@/components/trees/TreeListPanel';
+import TreePopup from '@/components/trees/TreePopup';
 import { buildPendingFeature, treesToFeatureCollection } from '@/components/trees/TreeMarkers';
 import type { TreeFeatureProperties } from '@/components/map/MapView';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
@@ -16,9 +19,12 @@ import { draftPosition, useTreeStore } from '@/stores/treeStore';
 const DEFAULT_ZOOM = 13;
 
 export default function MapPage(): JSX.Element {
+  const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef<MaplibreMap | null>(null);
   const popupRootRef = useRef<Root | null>(null);
   const popupContainerRef = useRef<HTMLDivElement | null>(null);
+  const treePopupRootRef = useRef<Root | null>(null);
+  const treePopupContainerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedParcel = useMapStore((s) => s.selectedParcel);
   const isLoading = useMapStore((s) => s.isLoading);
@@ -38,6 +44,10 @@ export default function MapPage(): JSX.Element {
   const loadTrees = useTreeStore((s) => s.loadTrees);
   const startPlacing = useTreeStore((s) => s.startPlacing);
   const activeProjectIdFromTree = useTreeStore((s) => s.activeProjectId);
+  const selectedTreeId = useTreeStore((s) => s.selectedTreeId);
+  const setSelectedTreeId = useTreeStore((s) => s.setSelectedTreeId);
+  const listPanelOpen = useTreeStore((s) => s.listPanelOpen);
+  const setListPanelOpen = useTreeStore((s) => s.setListPanelOpen);
 
   const { position, error: gpsError, loading: gpsLoading, refresh } = useGeolocation();
 
@@ -53,11 +63,47 @@ export default function MapPage(): JSX.Element {
 
   const handleMapReady = useCallback((map: MaplibreMap) => {
     mapRef.current = map;
+    setMapReady(true);
   }, []);
 
-  const handleTreeClick = useCallback((id: string) => {
-    useTreeStore.getState().selectTreeForEdit(id);
+  const handleTreeClick = useCallback(
+    (id: string, _lngLat: { lng: number; lat: number }) => {
+      setSelectedTreeId(id);
+    },
+    [setSelectedTreeId],
+  );
+
+  const handleSelectTree = useCallback(
+    (id: string) => {
+      const tree = useTreeStore.getState().trees.find((t) => t.id === id);
+      if (tree === undefined) {
+        return;
+      }
+      setSelectedTreeId(id);
+      const map = mapRef.current;
+      if (map !== null) {
+        map.flyTo({ center: [tree.lng, tree.lat], zoom: map.getZoom() });
+      }
+    },
+    [setSelectedTreeId],
+  );
+
+  const handleDeleteTree = useCallback((id: string) => {
+    void useTreeStore
+      .getState()
+      .deleteTree(id)
+      .catch(() => {
+        // the tree row disappears on success; on failure the popup/list stay as-is
+      });
   }, []);
+
+  const handleEditTree = useCallback(
+    (id: string) => {
+      useTreeStore.getState().selectTreeForEdit(id);
+      useTreeStore.getState().setListPanelOpen(false);
+    },
+    [],
+  );
 
   useEffect(() => {
     const map = mapRef.current;
@@ -99,6 +145,69 @@ export default function MapPage(): JSX.Element {
       popup.remove();
     };
   }, [selectedParcel]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const tree =
+      selectedTreeId !== null ? trees.find((t) => t.id === selectedTreeId) : undefined;
+
+    if (tree === undefined) {
+      treePopupRootRef.current?.render(null);
+      return;
+    }
+
+    treePopupContainerRef.current ??= document.createElement('div');
+
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      offset: 12,
+      maxWidth: '320px',
+    })
+      .setLngLat([tree.lng, tree.lat])
+      .setDOMContent(treePopupContainerRef.current)
+      .addTo(map);
+
+    treePopupRootRef.current ??= createRoot(treePopupContainerRef.current);
+    treePopupRootRef.current.render(
+      <TreePopup
+        tree={tree}
+        onEdit={() => {
+          useTreeStore.getState().selectTreeForEdit(tree.id);
+          setSelectedTreeId(null);
+        }}
+        onDelete={() => {
+          void useTreeStore
+            .getState()
+            .deleteTree(tree.id)
+            .then(() => {
+              setSelectedTreeId(null);
+            })
+            .catch(() => {
+              setSelectedTreeId(null);
+            });
+        }}
+        onClose={() => {
+          setSelectedTreeId(null);
+        }}
+      />,
+    );
+
+    return () => {
+      popup.remove();
+    };
+  }, [selectedTreeId, trees, setSelectedTreeId, mapReady]);
+
+  useEffect(() => {
+    return () => {
+      treePopupRootRef.current?.unmount();
+      treePopupRootRef.current = null;
+    };
+  }, []);
 
   const treeLayer = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null>(() => {
     if (mode === 'placing' || mode === 'editing') {
@@ -201,6 +310,32 @@ export default function MapPage(): JSX.Element {
       {hasProject && mode === 'idle' && (
         <Fab onClick={handleStartPlacing} />
       )}
+
+      {hasProject && (
+        <button
+          type="button"
+          aria-label="Pokaż listę drzew"
+          aria-expanded={listPanelOpen}
+          data-testid="tree-list-toggle"
+          onClick={() => {
+            setListPanelOpen(!listPanelOpen);
+          }}
+          className="fixed bottom-14 left-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-white text-forest-800 shadow-lg transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 focus-visible:ring-offset-2"
+        >
+          <List aria-hidden="true" className="h-6 w-6" />
+        </button>
+      )}
+
+      <TreeListPanel
+        open={listPanelOpen}
+        onClose={() => {
+          setListPanelOpen(false);
+        }}
+        trees={trees}
+        onSelectTree={handleSelectTree}
+        onDeleteTree={handleDeleteTree}
+        onEditTree={handleEditTree}
+      />
 
       <AddTreePanel
         gpsPosition={position}

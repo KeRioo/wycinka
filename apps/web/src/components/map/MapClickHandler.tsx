@@ -28,7 +28,7 @@ function toGeoJSONPolygon(parcel: Parcel): GeoJSON.Polygon {
 interface MapClickHandlerProps {
   onMapReady?: (map: MaplibreMap) => void;
   treeLayer?: GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null;
-  onTreeClick?: (id: string) => void;
+  onTreeClick?: (id: string, lngLat: { lng: number; lat: number }) => void;
 }
 
 export default function MapClickHandler({
