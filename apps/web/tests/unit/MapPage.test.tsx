@@ -146,17 +146,59 @@ describe('MapPage', () => {
     expect(useMapStore.getState().error).toBeNull();
   });
 
-  it('should display selected parcel popup card', () => {
+  it('should display the selected parcel card and skip the duplicate maplibre popup', () => {
     if (!MOCK_PARCEL) {
       throw new Error('Mock parcel missing');
     }
-    useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    popupMock.mockClear();
     render(
       <MemoryRouter initialEntries={['/map']}>
         <MapPage />
       </MemoryRouter>,
     );
-    expect(screen.getByText(MOCK_PARCEL.teryt)).toBeInTheDocument();
+    act(() => {
+      useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    });
+    expect(screen.getByTestId('parcel-card')).toBeInTheDocument();
+    expect(screen.getByText('Wybrana działka')).toBeInTheDocument();
+    expect(popupMock).not.toHaveBeenCalled();
+  });
+
+  it('should collapse parcel card details by default and expand on toggle', async () => {
+    const user = userEvent.setup();
+    if (!MOCK_PARCEL) {
+      throw new Error('Mock parcel missing');
+    }
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    act(() => {
+      useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    });
+    const toggle = screen.getByTestId('parcel-card-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('should close the parcel card when close is clicked', async () => {
+    const user = userEvent.setup();
+    if (!MOCK_PARCEL) {
+      throw new Error('Mock parcel missing');
+    }
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    act(() => {
+      useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    });
+    await user.click(screen.getByTestId('parcel-card-close'));
+    expect(useMapStore.getState().selectedParcel).toBeNull();
+    expect(screen.queryByTestId('parcel-card')).not.toBeInTheDocument();
   });
 
   it('should fit the map to the parcel bbox with maxZoom 17 when parcel is selected', () => {
