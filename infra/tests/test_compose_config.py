@@ -55,7 +55,7 @@ class DockerComposeConfigTest(unittest.TestCase):
 		svcs = set(self.cfg_prod["services"].keys())
 		self.assertEqual(
 			svcs,
-			{"api", "web", "caddy", "cloudflared"},
+			{"api", "web", "caddy", "cloudflared", "etl"},
 			f"Brak/nadmiar serwisow w produkcji: {svcs}",
 		)
 
@@ -213,6 +213,44 @@ class DockerComposeConfigTest(unittest.TestCase):
 						f"docker compose config failed for {compose_file.name}:\n"
 						f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
 					)
+
+	def test_prod_etl_service_structure(self) -> None:
+		etl = self.cfg_prod["services"].get("etl")
+		self.assertIsNotNone(etl, "Brak serwisu etl w produkcji")
+		self.assertIn("build", etl, "etl powinien byc zbudowany z Dockerfile")
+		self.assertEqual(etl.get("restart"), "unless-stopped")
+		self.assertIn("healthcheck", etl, "etl musi miec healthcheck")
+		vols = [str(v) for v in etl.get("volumes", [])]
+		has_named_api_data = any(
+			v.startswith("api-data:") or v.startswith("api_data:") for v in vols
+		)
+		self.assertTrue(
+			has_named_api_data,
+			f"etl musi montowac nazwany wolumen api-data, jest: {vols}",
+		)
+		self.assertNotIn("ports", etl, "etl nie moze eksponowac portow na hosta")
+
+	def test_prod_etl_network(self) -> None:
+		etl_net = self.cfg_prod["services"]["etl"].get("networks", [])
+		self.assertIn(
+			"etl-net",
+			etl_net,
+			"etl powinien siedziec na izolowanej sieci etl-net",
+		)
+		networks = self.cfg_prod.get("networks", {})
+		self.assertIn("etl-net", networks, "Siec etl-net musi byc zdefiniowana")
+
+	def test_prod_etl_non_root_user(self) -> None:
+		user = self.cfg_prod["services"]["etl"].get("user", "")
+		self.assertEqual(user, "etluser", "etl powinien odpalac sie jako etluser w compose")
+
+	def test_dev_has_no_etl(self) -> None:
+		svcs = set(self.cfg_dev["services"].keys())
+		self.assertNotIn(
+			"etl",
+			svcs,
+			"Dev compose nie powinien odpalac crona ETL na diverach (sync = manualny run-once)",
+		)
 
 
 if __name__ == "__main__":
