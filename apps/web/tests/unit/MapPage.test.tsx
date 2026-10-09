@@ -293,4 +293,19 @@ describe('MapPage — tree list and marker popup', () => {
       expect(useTreeStore.getState().selectedTreeId).toBeNull();
     });
   });
+
+  it('should open the PDF export dialog when the export button is clicked', async () => {
+    const user = userEvent.setup();
+    await seedProjectAndTree();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('pdf-export-toggle')).toBeInTheDocument();
+    expect(screen.queryByTestId('pdf-export-dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('pdf-export-toggle'));
+    expect(screen.getByTestId('pdf-export-dialog')).toBeInTheDocument();
+    expect(screen.getByText('Eksport PDF')).toBeInTheDocument();
+  });
 });
