@@ -36,7 +36,10 @@ export function usePMTiles(pmtilesUrl: string, protocolKey = 'pmtiles'): void {
     if (!pmtilesUrl) {
       return;
     }
-    void fetch(pmtilesUrl, { method: 'HEAD' }).catch(() => {
+    void fetch(pmtilesUrl, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-0' },
+    }).catch(() => {
       // ignore - tile requests will surface errors later
     });
   }, [pmtilesUrl]);

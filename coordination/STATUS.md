@@ -660,3 +660,62 @@ Branch: `feat/multi-parcel-project` (worktree /root/wt-multi-parcel)
   wygenerowany lokalnie z minimalnego syntetycznego archiwum PMTiles v3
   (header + pusty root dir + '{}' metadata).
 - Także hardening e2e w trees/arrowpad-hold/snap-vertex (retry czekania na FAB).
+
+## Frontend (subagent: frontend)
+
+Branch: `feat/search-ui` (worktree /root/wt-search)
+
+### SearchBox TERYT (zakończone)
+
+- [x] `apps/web/src/components/layout/SearchBox.tsx` — search działki:
+      debounce 500 ms, min 2 znaki, max 10 wyników (`api.searchParcels(q, 10)`,
+      endpoint `GET /api/v1/search?q=&limit=10`), request-id guard na stale
+      response; loading skeleton, empty state PL ("Brak wyników…"), komunikaty
+      błędów PL (NETWORK/TIMEOUT/DB_UNAVAILABLE/BAD_REQUEST).
+- [x] A11y/kbd: combobox + listbox/option, `aria-activedescendant`, ArrowUp/Down
+      cyklicznie, Enter wybiera, Escape zamyka, klik poza komponentem zamyka.
+- [x] Header: SearchBox inline w prawym rogu na desktop; mobile jako druga linia
+      pod nawigacją (flex-wrap + `order-last basis-full`, header nie ma
+      sztywnej h-14, `min-h-14`).
+- [x] `apps/web/src/lib/search.ts` — `selectSearchResult()`: fetch
+      `GET /api/v1/parcel/{teryt}` → mapStore `setSelectedParcel` +
+      `requestFocus(centroid)` (MapPage robi flyTo, bez fitBounds — mała
+      działka) → `ensureActiveProject()` → navigate `/map`. faildown:
+      komunikat PL w searchboxie.
+- [x] Badge "w projekcie" na wyniku, gdy działka już jest w aktywnym projekcie
+      (projectStore.projectParcels).
+- [x] Toasts: błąd wyboru = inline error w dropdown (setToast z projectStore
+      używany tylko na /map — decision).
+
+### Fix healthcheck PMTiles
+
+- [x] `usePMTiles.ts`: healthcheck zamienia HEAD → `GET` z
+      `Range: bytes=0-0` (backend wspiera tylko GET; 405 Method Not Allowed).
+
+### Tests
+
+- [x] Unit `tests/unit/SearchBox.test.tsx` — 12 testów (debounce timing,
+      min 2 znaki, limit=10 w URL, loading skeleton (delay infinite),
+      wyniki, keyboard select → navigate + selectedParcel + focusTarget
+      {lat: centroid}), "w projekcie", Escape, empty, 503→PL, network error
+      (spy api.searchParcels), stale-cancel (q=1410→14120).
+- [x] E2E `tests/e2e/search-nav.spec.ts` — 3 testy (mock `**/api/v1/search*`,
+      `**/api/v1/parcel/**`); wybór kliknięciem i klawiaturą → URL /map +
+      map-container widoczny; `<2 znaków` nic nie robi.
+- [x] Uwaga: unit testy z fake timers + waitFor — triggerSearch kończy się
+      `vi.useRealTimers()` (waitFor potrzebuje realnych); `vi.restoreAllMocks()`
+      w afterEach (spy api.searchParcels wyciekł bysat do następnego testu).
+
+### Gates
+
+- typecheck OK, lint OK (--max-warnings=0), 436 testów (45 plików) OK,
+  coverage global 92.94% lines / 88.61% branches (SearchBox.tsx 84.93%),
+  build OK, e2e 30/30 OK.
+
+### Uwagi
+
+- Fixture `tests/e2e/fixtures/minimal.pmtiles` jest gitignored (*pmtiles) —
+  regenerate: pobrałem `test_fixture_1.pmtiles` (468 B) z
+  protomaps/PMTiles `js/test/data` (raw githubusercontent); mój wcześniejszy
+  syntetyczny 129 B (header+empty root) nie wystarczył — snap-vertex
+  waliduje. Jeśli inny agent potrzebuję, re-pobierz ten sam plik.
