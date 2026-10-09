@@ -236,6 +236,8 @@ export default function MapPage(): JSX.Element {
     }
     if (position !== null) {
       startPlacing({ gpsPosition: position });
+    } else if (selectedParcel !== null) {
+      startPlacing({ gpsPosition: { lat: selectedParcel.centroid[1], lng: selectedParcel.centroid[0] } });
     } else {
       startPlacing();
     }
