@@ -35,9 +35,15 @@ docker compose -f docker-compose.dev.yml up --build
 
 | Serwis | URL | Co |
 |---|---|---|
+| Service | URL | Co |
+|---|---|---|
 | API | http://localhost:8000 | FastAPI + Uvicorn z hot reload |
 | Web | http://localhost:5173 | Vite dev server z hot reload |
 | PMTiles | http://localhost:8000/api/v1/pmtiles/dzialki | przez API |
+
+ETL nie jest w compose dev — uruchamiany ręcznie (`docker compose
+-f docker-compose.yml run --rm etl /usr/local/bin/run-sync.sh --powiat <teryt>`),
+żeby cron nie nadpisywal danych pod nogami hot-reloadu.
 
 `VITE_API_URL=http://localhost:8000/api/v1` jest ustawiane automatycznie.
 
@@ -45,10 +51,17 @@ docker compose -f docker-compose.dev.yml up --build
 
 ```
 infra/
-├── docker-compose.yml          # produkcja (api, web, caddy, cloudflared)
+├── docker-compose.yml          # produkcja (api, web, caddy, cloudflared, etl)
 ├── docker-compose.dev.yml      # dev (hot reload)
 ├── .env.example                 # zmienne srodowiskowe
+├── operational-runbook.md       # operacje: deploy, rollback, backup, awarie
 ├── README.md                   # ten plik
+│
+├── etl/                         # EGiB sync (cron-container)
+│   └── Dockerfile               # python 3.12-slim + tippecanoe (build from source, pin 2.79.0)
+│   ├── scheduler.sh             # sleep-based scheduler (brak roota, bez demona)
+│   ├── run-sync.sh              # pojedyncze uruchomienie + markery statusu
+│   └── etl-healthcheck.sh       # freshness-based healthcheck
 │
 ├── caddy/                       # reverse-proxy z auto-HTTPS
 │   ├── Caddyfile
@@ -68,7 +81,7 @@ infra/
 │   └── healthcheck.sh           # sprawdza caly stack
 │
 └── tests/                       # walidacja konfiguracji (lekka, bez dockera)
-    ├── test_compose_config.py
+    ├── test_etl_config.py
     ├── test_caddyfile.py
     ├── test_cloudflared_config.py
     └── run.py
@@ -124,10 +137,12 @@ pip install pyyaml  # jesli brak
 python -m infra.tests
 ```
 
-33 testow:
-- Struktura obu compose'ow (serwisy, healthcheck, restart, volumes, pinned images)
+51 testow:
+Sekcje:
+- Struktura obu compose'ow (tylko w compose prod: serwis etl — healthcheck, restart, volumes, network etl-net, non-root, bez portow)
 - Caddyfile (wymagane bloki, naglowki bezpieczenstwa, kompresja, flush_interval)
 - cloudflared config (placeholder TUNNEL_ID, ingress rules, catchall 404)
+- ETL: Dockerfile (pin wersji python/tippecanoe, USER etluser), skrypty bash (`bash -n`), runbook (operational-runbook.md)
 
 Jesli w PATH sa `docker` i `caddy`, uruchamia rowniez ich CLI validation.
 

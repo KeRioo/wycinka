@@ -30,6 +30,14 @@ if __name__ == "__main__":
 	suite.addTests(loader.loadTestsFromTestCase(DockerComposeConfigTest))
 	suite.addTests(loader.loadTestsFromTestCase(CaddyfileTest))
 	suite.addTests(loader.loadTestsFromTestCase(CloudflaredConfigTest))
+	from infra.tests.test_etl_config import (
+		EtlDockerfileTest,
+		EtlRunbookTest,
+		EtlScriptsTest,
+	)
+	suite.addTests(loader.loadTestsFromTestCase(EtlScriptsTest))
+	suite.addTests(loader.loadTestsFromTestCase(EtlDockerfileTest))
+	suite.addTests(loader.loadTestsFromTestCase(EtlRunbookTest))
 
 	runner = unittest.TextTestRunner(verbosity=2)
 	result = runner.run(suite)

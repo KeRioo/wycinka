@@ -37,7 +37,7 @@ echo
 
 # 1. Kontenery — czy w ogóle żyją?
 echo "--- containers ---"
-for svc in api web caddy cloudflared; do
+for svc in api web caddy cloudflared etl; do
 	if docker compose -f "${COMPOSE_FILE}" ps --services --status running 2>/dev/null | grep -q "^${svc}$"; then
 		echo "${GREEN}[OK]${NC}   container ${svc} is running"
 	else

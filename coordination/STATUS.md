@@ -370,3 +370,23 @@ TODO dla następnego etapu:
 - decyzja nadzorca: `/sync/*` do `docs/api-contract.md`
 - decyzja nadzorca: fix triggera `parcels_rtree_delete` (orphan w R-tree)
 - ETL: ustawić `WYCINKA_SYNC_COMMAND` w `infra/docker-compose.yml`
+
+---
+
+## Milestone 9 — infra (feat/infra-etl-cron-runbook), 2026-10-09
+
+### Dostarczone
+- `infra/etl/Dockerfile` — multi-stage: debian:bookworm-slim builder kompiluje tippecanoe z felt/tippecanoe (pin tag 2.79.0, `make install PREFIX`), egib-building stage buduje wheels z contextu `scripts/sync-egib`, runtime `python:3.12-slim-bookworm`, USER etluser (uid 1000), `tippecanoe --version` sanity check po buildzie.
+- `infra/docker-compose.yml` — serwis `etl`: restart unless-stopped, healthcheck CMD-SHELL (bash skrypt), volume `api-data:/app/data` (rw) wspolny z api, siec `etl-net`, tmpfs /tmp, skrypty bindowane `:ro` do /usr/local/bin. Dev compose bez service (sync = manualny run-once).
+- `infra/etl/{scheduler,run-sync,etl-healthcheck}.sh` — sleep-based scheduler (ETL_INTERVAL_SECONDS, run-once, SIGTERM trap), pojedynczy przebieg + markery `.sync-ops/last-success|last-failure` + rotacja JSON raportow, healthcheck freshness (marker starszy niz 2x interval = unhealthy).
+- `infra/operational-runbook.md` — deploy step-by-step, rollback (IMAGE_TAG + tylko-service rebuild), monitoring (healthcheck per serwis, host-cron, logi, raporty JSON), troubleshooting (tunnel down, disk full, PMTiles corrupt, etl unhealthy), backup/restore.
+- `infra/tests/` — test_compose_config rozszerzony o etl; nowy test_etl_config (bash -n, Dockerfile pins/non-root, runbook). `python3 infra/tests/run.py` = 51 testow OK (2 skip: docker CLI absent), walidacja statyczna.
+
+### Decyzje
+- Scheduler: **sleep-based bash loop** (nie ofelia/cron-d) — testowalny bez dockera (`bash -n`), nie wymaga roota (cron-d i ofelia tak), ten sam skrypt sluzy do run-once przez `docker compose run`.
+- Tippecanoe: **build from source, pin 2.79.0** (nie fmtec/mathiasdufour image) — weryfikowalny pin w Dockerfile, mniejsza zaufanie-trzeciej-strony, identyczny glibc (debian builder + python slim runtime). Repo przesladowane do felt/tippecanoe.
+- Siec etl: **dedikowana `etl-net` (bridge, NIE internal)** — ETL potrzebuje ruchu wychodacego do GUGIK/geoporta, izolacja od caddy/web zachowana.
+
+### Uwagi dla innych
+- etl pisze do `data/egib-raw`, `data/work`, `data/pmtiles`, `data/sqlite` we wspolnym wolumenie `api-data`; api czyta `pmtiles/dzialki.pmtiles` i `sqlite/parcels.sqlite` — backend: sciezki sa pod `/app/data/...`.
+- Filtrowanie powiatow: `docker compose run --rm etl /usr/local/bin/run-sync.sh --powiat <teryt>`.
