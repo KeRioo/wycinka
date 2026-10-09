@@ -113,4 +113,48 @@ describe('useProjectStore', () => {
     const active = useProjectStore.getState().getActive();
     expect(active?.id).toBe(p.id);
   });
+
+  it('should saveSpeciesConfig persist to Dexie and update state', async () => {
+    const p = await useProjectStore.getState().createAndActivate('Las');
+    const species = [
+      { name: 'Modrzew', color: '#4ade80' },
+      { name: 'Jodła', color: '#166534' },
+    ];
+    await useProjectStore.getState().saveSpeciesConfig(p.id, species);
+
+    const stored = await db.projects.get(p.id);
+    expect(stored?.speciesConfig).toEqual(species);
+    expect(useProjectStore.getState().projects[0]?.speciesConfig).toEqual(species);
+  });
+
+  it('should saveRangesConfig persist to Dexie and update state', async () => {
+    const p = await useProjectStore.getState().createAndActivate('Las');
+    const ranges = [
+      { from: 0, to: 40, label: 'małe' },
+      { from: 40, to: Number.POSITIVE_INFINITY, label: 'duże' },
+    ];
+    await useProjectStore.getState().saveRangesConfig(p.id, ranges);
+
+    const stored = await db.projects.get(p.id);
+    expect(stored?.rangesConfig).toEqual(ranges);
+    expect(useProjectStore.getState().projects[0]?.rangesConfig[1]?.to).toBe(Infinity);
+  });
+
+  it('should savePdfPrefs persist to Dexie and update state', async () => {
+    const p = await useProjectStore.getState().createAndActivate('Las');
+    const prefs = {
+      layout: 'one-per-page' as const,
+      markerColorBy: 'species' as const,
+      markerSizeBy: 'fixed' as const,
+      markerScale: { baseSize: 4, perCm: 0, maxSize: 20 },
+      showNumberedTable: false,
+      tableOnSeparatePage: true,
+      autoRotate: false,
+    };
+    await useProjectStore.getState().savePdfPrefs(p.id, prefs);
+
+    const stored = await db.projects.get(p.id);
+    expect(stored?.pdfPrefs.layout).toBe('one-per-page');
+    expect(useProjectStore.getState().projects[0]?.pdfPrefs.tableOnSeparatePage).toBe(true);
+  });
 });

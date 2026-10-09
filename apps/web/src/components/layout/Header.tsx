@@ -11,6 +11,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/', label: 'Start' },
   { to: '/map', label: 'Mapa' },
   { to: '/projects', label: 'Projekty' },
+  { to: '/settings', label: 'Ustawienia' },
 ];
 
 export default function Header(): JSX.Element {

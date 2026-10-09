@@ -6,6 +6,7 @@ import NotFound from '@/pages/NotFound';
 import ProjectsPage from '@/pages/ProjectsPage';
 
 const MapPage = lazy(() => import('@/pages/MapPage'));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 
 function PageFallback(): JSX.Element {
   return (
@@ -29,6 +30,7 @@ export default function App(): JSX.Element {
             <Route path="/" element={<HomePage />} />
             <Route path="/map" element={<MapPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

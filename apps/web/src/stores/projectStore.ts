@@ -4,6 +4,8 @@ import {
   deleteProject as deleteProjectFromDb,
   listProjects,
   updatePdfPrefs as updatePdfPrefsInDb,
+  updateRangesConfig as updateRangesConfigInDb,
+  updateSpeciesConfig as updateSpeciesConfigInDb,
   type Project,
 } from '@/db/schema';
 
@@ -19,6 +21,8 @@ interface ProjectState {
   createAndActivate: (name: string) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
   savePdfPrefs: (id: string, prefs: Project['pdfPrefs']) => Promise<void>;
+  saveSpeciesConfig: (id: string, species: Project['speciesConfig']) => Promise<void>;
+  saveRangesConfig: (id: string, ranges: Project['rangesConfig']) => Promise<void>;
   refresh: () => Promise<void>;
   getActive: () => Project | null;
   clear: () => void;
@@ -85,6 +89,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   savePdfPrefs: async (id, prefs) => {
     const updated = await updatePdfPrefsInDb(id, prefs);
+    set((state) => ({
+      projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
+    }));
+  },
+
+  saveSpeciesConfig: async (id, species) => {
+    const updated = await updateSpeciesConfigInDb(id, species);
+    set((state) => ({
+      projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
+    }));
+  },
+
+  saveRangesConfig: async (id, ranges) => {
+    const updated = await updateRangesConfigInDb(id, ranges);
     set((state) => ({
       projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
     }));
