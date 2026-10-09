@@ -25,7 +25,16 @@ services:
   web:
     build:
       context: ../apps/web
-      dockerfile: Dockerfile
+      # Dockerfile w infra (kopia apps/web/Dockerfile): apps/web/.dockerignore
+      # wyklucza nginx.conf zbudowanie własnego obiektu — patrz infra/web/Dockerfile
+      # w REQUESTS.md.
+      dockerfile: ../../infra/web/Dockerfile
+      additional_contexts:
+        infra: ../
+      # Prod PWA działa same-origin (caddy + basic auth): relatywny API base.
+      # Dev używa Vite dev serwa (VITE_API_URL w docker-compose.dev.yml).
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
     image: wycinka-web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
