@@ -125,6 +125,60 @@ def _atomic_replace(tmp: Path, final: Path) -> None:
     tmp.replace(final)
 
 
+PMTILES_MAGIC: Final[bytes] = b"PMTiles"
+PMTILES_CONVERT_TIMEOUT_SECONDS: Final[int] = 900
+
+
+def _ensure_pmtiles_format(staging: Path) -> Path:
+    """Return a true PMTiles v3 file, converting from MBTiles when required.
+
+    tippecanoe (< 3.x) emits an MBTiles (SQLite) container even when the
+    output has a ``.pmtiles`` suffix. The ``pmtiles convert`` helper from
+    go-pmtiles fixes that; when it is unavailable, the staging file is kept
+    as-is (callers on tippecanoe >= 3.x need no conversion).
+    """
+    with staging.open("rb") as handle:
+        magic = handle.read(len(PMTILES_MAGIC))
+    if magic == PMTILES_MAGIC:
+        return staging
+
+    convert = shutil.which("pmtiles")
+    if convert is None:
+        logger.warning(
+            "pmtiles_convert_skipped",
+            reason="pmtiles binary not on PATH",
+            hint="install go-pmtiles (https://github.com/protomaps/go-pmtiles)",
+        )
+        return staging
+
+    converted = staging.with_name(f".{staging.stem}.true.tmp")
+    cmd = [convert, "convert", str(staging), str(converted)]
+    try:
+        result = subprocess.run(  # noqa: S603
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=PMTILES_CONVERT_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.exception("pmtiles_convert_failed")
+        return staging
+    with converted.open("rb") as handle:
+        magic = handle.read(len(PMTILES_MAGIC)) if converted.exists() else b""
+    if result.returncode != 0 or magic != PMTILES_MAGIC:
+        logger.warning(
+            "pmtiles_convert_failed",
+            returncode=result.returncode,
+            stderr=result.stderr[-400:] if result.stderr else "",
+        )
+        return staging
+    logger.info("pmtiles_converted", output=str(converted))
+    return converted
+
+
 def generate_pmtiles(
     input_gpkg: Path,
     output_pmtiles: Path,
@@ -231,7 +285,11 @@ def generate_pmtiles(
             cmd,
         )
 
-    _atomic_replace(tmp_path, output_pmtiles)
+    # tippecanoe < 3.x writes an MBTiles (SQLite) container regardless of the
+    # output suffix — convert to a real PMTiles v3 archive when needed.
+    staging = _ensure_pmtiles_format(tmp_path)
+
+    _atomic_replace(staging, output_pmtiles)
 
     size = output_pmtiles.stat().st_size
     logger.info(

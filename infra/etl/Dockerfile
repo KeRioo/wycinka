@@ -1,6 +1,7 @@
 ARG TIPPECANOE_VERSION=2.79.0
 ARG PYTHON_IMAGE=python:3.12-slim-bookworm
 ARG DEB_IMAGE=debian:bookworm-slim
+ARG PMTILES_VERSION=1.31.2
 
 FROM ${DEB_IMAGE} AS tippecanoe-builder
 ARG TIPPECANOE_VERSION=2.79.0
@@ -64,6 +65,13 @@ RUN apt-get update \
     && useradd --system --uid 1000 --gid etluser --create-home --shell /usr/sbin/nologin etluser
 
 COPY --from=tippecanoe-builder /tippecanoe/bin/ /usr/local/bin/
+
+# go-pmtiles — konwersja MBTiles (default tippecanoe 2.x) -> PMTiles v3
+ARG PMTILES_VERSION=1.31.2
+ADD https://github.com/protomaps/go-pmtiles/releases/download/v${PMTILES_VERSION}/go-pmtiles_${PMTILES_VERSION}_Linux_x86_64.tar.gz /tmp/go-pmtiles.tar.gz
+RUN tar -xzf /tmp/go-pmtiles.tar.gz -C /usr/local/bin/ pmtiles \
+    && rm /tmp/go-pmtiles.tar.gz \
+    && pmtiles version | head -1
 
 COPY --from=egib-builder /wheels /wheels
 RUN pip install --no-index /wheels/*.whl \
