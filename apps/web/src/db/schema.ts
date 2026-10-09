@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import Dexie, { type Table } from 'dexie';
 import type { Geometry, Parcel } from '@/services/api.types';
 
@@ -272,6 +273,31 @@ export async function updateTree(id: string, patch: TreeUpdate): Promise<Tree> {
   const next: Tree = { ...existing, ...patch };
   await db.trees.put(next);
   return next;
+}
+
+export const projectNameSchema = z
+  .string()
+  .transform((value) => value.trim())
+  .refine((value) => value.length >= 1 && value.length <= 100, {
+    message: 'Nazwa projektu musi mieć od 1 do 100 znaków',
+  });
+
+export type RenameProjectResult =
+  | { ok: true; project: Project }
+  | { ok: false; error: string };
+
+export async function renameProject(id: string, name: string): Promise<RenameProjectResult> {
+  const parsed = projectNameSchema.safeParse(name);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Nieprawidłowa nazwa projektu' };
+  }
+  const existing = await db.projects.get(id);
+  if (existing === undefined) {
+    return { ok: false, error: `Projekt ${id} nie istnieje` };
+  }
+  const next: Project = { ...existing, name: parsed.data, updatedAt: new Date() };
+  await db.projects.put(next);
+  return { ok: true, project: next };
 }
 
 export async function updatePdfPrefs(id: string, prefs: PdfPrefs): Promise<Project> {
