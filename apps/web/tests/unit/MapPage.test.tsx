@@ -14,6 +14,7 @@ const { mapInstance, popupMock } = vi.hoisted(() => {
     off: vi.fn(),
     remove: vi.fn(),
     flyTo: vi.fn(),
+    fitBounds: vi.fn(),
     addControl: vi.fn(),
     addSource: vi.fn(),
     addLayer: vi.fn(),
@@ -145,17 +146,102 @@ describe('MapPage', () => {
     expect(useMapStore.getState().error).toBeNull();
   });
 
-  it('should display selected parcel popup card', () => {
+  it('should display the selected parcel card and skip the duplicate maplibre popup', () => {
     if (!MOCK_PARCEL) {
       throw new Error('Mock parcel missing');
     }
-    useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    popupMock.mockClear();
     render(
       <MemoryRouter initialEntries={['/map']}>
         <MapPage />
       </MemoryRouter>,
     );
-    expect(screen.getByText(MOCK_PARCEL.teryt)).toBeInTheDocument();
+    act(() => {
+      useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    });
+    expect(screen.getByTestId('parcel-card')).toBeInTheDocument();
+    expect(screen.getByText('Wybrana działka')).toBeInTheDocument();
+    expect(popupMock).not.toHaveBeenCalled();
+  });
+
+  it('should collapse parcel card details by default and expand on toggle', async () => {
+    const user = userEvent.setup();
+    if (!MOCK_PARCEL) {
+      throw new Error('Mock parcel missing');
+    }
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    act(() => {
+      useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    });
+    const toggle = screen.getByTestId('parcel-card-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('should close the parcel card when close is clicked', async () => {
+    const user = userEvent.setup();
+    if (!MOCK_PARCEL) {
+      throw new Error('Mock parcel missing');
+    }
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    act(() => {
+      useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    });
+    await user.click(screen.getByTestId('parcel-card-close'));
+    expect(useMapStore.getState().selectedParcel).toBeNull();
+    expect(screen.queryByTestId('parcel-card')).not.toBeInTheDocument();
+  });
+
+  it('should fit the map to the parcel bbox with maxZoom 17 when parcel is selected', () => {
+    if (!MOCK_PARCEL) {
+      throw new Error('Mock parcel missing');
+    }
+    mapInstance.fitBounds.mockClear();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    callLatestLoadHandler();
+    act(() => {
+      useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    });
+    expect(mapInstance.fitBounds).toHaveBeenCalledWith(
+      [
+        [MOCK_PARCEL.bbox[0], MOCK_PARCEL.bbox[1]],
+        [MOCK_PARCEL.bbox[2], MOCK_PARCEL.bbox[3]],
+      ],
+      { maxZoom: 17, padding: 60, duration: 800 },
+    );
+    expect(mapInstance.flyTo).not.toHaveBeenCalled();
+  });
+
+  it('should fly the map to the pending pin and clear the focus target when requested', () => {
+    mapInstance.flyTo.mockClear();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    callLatestLoadHandler();
+    act(() => {
+      useMapStore.getState().requestFocus({ lat: 52.15, lng: 21.23 });
+    });
+    expect(mapInstance.flyTo).toHaveBeenCalledWith({
+      center: [21.23, 52.15],
+      zoom: 13,
+      duration: 500,
+    });
+    expect(useMapStore.getState().focusTarget).toBeNull();
   });
 });
 

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl';
-import { List, FileDown } from 'lucide-react';
+import { List, FileDown, X } from 'lucide-react';
+import type { Parcel } from '@/services/api.types';
 import MapClickHandler from '@/components/map/MapClickHandler';
 import ParcelPopup from '@/components/map/ParcelPopup';
 import AddTreePanel from '@/components/trees/AddTreePanel';
@@ -16,14 +17,11 @@ import { useGeolocation } from '@/hooks/useGeolocation';
 import { useMapStore } from '@/stores/mapStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { draftPosition, useTreeStore } from '@/stores/treeStore';
-
-const DEFAULT_ZOOM = 13;
+import { parcelFitBounds } from '@/lib/geo';
 
 export default function MapPage(): JSX.Element {
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef<MaplibreMap | null>(null);
-  const popupRootRef = useRef<Root | null>(null);
-  const popupContainerRef = useRef<HTMLDivElement | null>(null);
   const treePopupRootRef = useRef<Root | null>(null);
   const treePopupContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -111,44 +109,14 @@ export default function MapPage(): JSX.Element {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) {
+    if (!map || !mapReady || !selectedParcel) {
       return;
     }
-
-    if (!selectedParcel) {
-      popupRootRef.current?.unmount();
-      popupRootRef.current = null;
-      if (popupContainerRef.current) {
-        popupContainerRef.current.innerHTML = '';
-      }
-      return;
+    const bounds = parcelFitBounds(selectedParcel.bbox, selectedParcel.geom);
+    if (bounds !== null) {
+      map.fitBounds(bounds, { padding: 60, maxZoom: 17, duration: 800 });
     }
-
-    popupContainerRef.current ??= document.createElement('div');
-
-    const popup = new maplibregl.Popup({
-      closeButton: true,
-      closeOnClick: true,
-      offset: 12,
-      maxWidth: '320px',
-    })
-      .setLngLat([selectedParcel.centroid[0], selectedParcel.centroid[1]])
-      .setDOMContent(popupContainerRef.current)
-      .addTo(map);
-
-    popupRootRef.current ??= createRoot(popupContainerRef.current);
-    popupRootRef.current.render(<ParcelPopup parcel={selectedParcel} />);
-
-    map.flyTo({
-      center: [selectedParcel.centroid[0], selectedParcel.centroid[1]],
-      zoom: DEFAULT_ZOOM,
-      duration: 800,
-    });
-
-    return () => {
-      popup.remove();
-    };
-  }, [selectedParcel]);
+  }, [selectedParcel, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -213,6 +181,22 @@ export default function MapPage(): JSX.Element {
     };
   }, []);
 
+  const pendingFocus = useMapStore((s) => s.focusTarget);
+  const clearFocus = useMapStore((s) => s.clearFocusTarget);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || pendingFocus === null) {
+      return;
+    }
+    map.flyTo({
+      center: [pendingFocus.lng, pendingFocus.lat],
+      zoom: map.getZoom(),
+      duration: 500,
+    });
+    clearFocus();
+  }, [pendingFocus, mapReady, clearFocus]);
+
   const treeLayer = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null>(() => {
     if (mode === 'placing' || mode === 'editing') {
       if (pending === null) {
@@ -259,7 +243,10 @@ export default function MapPage(): JSX.Element {
         onTreeClick={handleTreeClick}
       />
 
-      <aside className="pointer-events-none absolute left-4 top-4 max-w-sm space-y-2">
+      <aside
+        data-testid="map-overlays"
+        className="pointer-events-none absolute left-4 top-4 max-w-[70vw] space-y-2 sm:max-w-sm"
+      >
         {isLoading && (
           <Card className="pointer-events-auto">
             <CardContent className="flex items-center gap-3 p-3 text-sm text-forest-700">
@@ -283,17 +270,12 @@ export default function MapPage(): JSX.Element {
           </Card>
         )}
         {selectedParcel && (
-          <Card className="pointer-events-auto">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 p-3">
-              <CardTitle className="text-sm">Wybrana działka</CardTitle>
-              <Button size="sm" variant="ghost" onClick={() => { setSelected(null); }}>
-                Zamknij
-              </Button>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <ParcelPopup parcel={selectedParcel} />
-            </CardContent>
-          </Card>
+          <ParcelCard
+            parcel={selectedParcel}
+            onClose={() => {
+              setSelected(null);
+            }}
+          />
         )}
         {!hasProject && !isLoadingProjects && projects.length === 0 && (
           <Card className="pointer-events-auto">
@@ -381,5 +363,50 @@ export default function MapPage(): JSX.Element {
         <p className="text-stone-700">Mapa wymaga włączonej obsługi JavaScript.</p>
       </noscript>
     </div>
+  );
+}
+
+interface ParcelCardProps {
+  parcel: Parcel;
+  onClose: () => void;
+}
+
+function ParcelCard({ parcel, onClose }: ParcelCardProps): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <Card className="pointer-events-auto" data-testid="parcel-card">
+      <CardHeader className="flex flex-row items-start justify-between gap-1 p-3 pb-1">
+        <div className="min-w-0">
+          <CardTitle className="text-sm">Wybrana działka</CardTitle>
+          <p className="truncate font-mono text-xs text-stone-500">{parcel.teryt}</p>
+        </div>
+        <div className="flex shrink-0 items-center">
+          <button
+            type="button"
+            data-testid="parcel-card-toggle"
+            aria-expanded={expanded}
+            onClick={() => {
+              setExpanded((prev) => !prev);
+            }}
+            className="flex h-11 items-center rounded px-2 text-sm text-forest-700 hover:bg-forest-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 sm:hidden"
+          >
+            {expanded ? 'Mniej' : 'Szczegóły'}
+          </button>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label="Zamknij kartę działki"
+            data-testid="parcel-card-close"
+            onClick={onClose}
+            className="h-11 w-11 px-0"
+          >
+            <X aria-hidden="true" className="h-5 w-5" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className={expanded ? 'p-3 pt-0' : 'hidden p-3 pt-0 sm:block'}>
+        <ParcelPopup parcel={parcel} />
+      </CardContent>
+    </Card>
   );
 }

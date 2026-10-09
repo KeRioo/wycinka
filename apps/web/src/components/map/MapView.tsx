@@ -238,6 +238,10 @@ export default function MapView({
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
+    if (import.meta.env.MODE !== 'production') {
+      (window as unknown as Record<string, unknown>).wycinkaMap = map;
+    }
+
     map.on('load', () => {
       map.on('click', 'trees-circle', (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ['trees-circle'] });
@@ -265,9 +269,6 @@ export default function MapView({
       setStyleLoaded(true);
       setMap(map);
       onMapReady?.(map);
-      if (import.meta.env.MODE !== 'production') {
-        (window as unknown as Record<string, unknown>).wycinkaMap = map;
-      }
     });
 
     const handleClick = (e: MapLayerMouseEvent): void => {

@@ -2,6 +2,64 @@
 
 > Aktualizowane przez każdego subagenta po zakończeniu zadania.
 
+## Frontend (UX mobilny) — branch `feat/ux-mobile-panel`, worktree `/root/wt-ux-mobile` (2026-10-09)
+
+Commity (atomowe, w kolejności): `2af2d86` → `6ddbd07` → `bf1167b` → `6654bbc`.
+
+- [x] **fitBounds wg bbox działki** (`2af2d86`): `MapPage` — usunięty `flyTo` do centroidu; nowy
+      `parcelFitBounds(bbox, geom)` w `tests/unit/geoBounds.test.ts` + `lib/geo.ts` (walidacja bbox,
+      fallback z geometrii; fitBounds `[[minLng,minLat],[maxLng,maxLat]], {padding:60, maxZoom:17, duration:800}`);
+      unit test asercji fitBounds + `maxZoom: ≤17` (mock `mapInstance.fitBounds`).
+- [x] **Jedna karta działki** (`6ddbd07`): usunięty maplibre Popup dla `selectedParcel` (duplikat);
+      `ParcelPopup` zostaje TYLKO w karcie "Wybrana działka" (aside lewy-górny). Card nowy layout:
+      TERYT widoczny zawsze, szczegóły zwinięte na mobile z przyciskiem toggle ("Szczegóły"/"Mniej",
+      `data-testid=parcel-card-toggle`)
+      i przycisk "Zamknij" (X, 44×44px). Na desktop szczegóły widoczne wprost. Testy unit (MapPage +
+      ParcelPopup brakPopup / toggle / close) + E2E na klik.
+- [x] **AddTreePanel — mobile-first** (`bf1167b`): na ≤640px = **bottom sheet 62vh** (rounded-t,
+      drag-handle `data-testid=add-tree-drag-handle`; drag tylko przez handle, `useDragControls` +
+      `dragListener={false}`, ograniczenie `dragConstraints.y >= 0` — wierzch panelu zawsze poniżej
+      górnej krawędzi ekranu; zamknięcie przez przeciągnięcie poniżej progu offset/velocity).
+      Na ≥640px = wąska **sidebar po prawej** (width min(22rem, 90vw), height calc(100%-1.5rem),
+      rounded-2xl)`; panel ma wszystkie kontrolki (GPS, pozycja, ArrowPad, TreeForm, Anuluj/Zapisz).
+      Nowy przycisk **"Przesuń mapę do pinezki"** (`data-testid=focus-pending`, ikona LocateFixed):
+      `mapStore.requestFocus({lat,lng})` → `MapPage` effect `map.flyTo({center, zoom: map.getZoom(),
+      duration:500})` i czyści focusTarget. Touch targety ≥44px (zamknij X h-11/w-11, przycisk
+      h-11, przyciski Button size md h-11, ArrowPad h-14).
+- [x] **Pointer-events** (debug #3): overlaye `aside#map-overlays` mają `pointer-events-none`
+      (children `pointer-events-auto`); `AddTreePanel` i `drag-handle` renderują się **bazą**
+      `id`/`data-testid` i zamykają się poprawnie (E2E dotknąć+dotknąć działa). Zatwierdzone E2E.
+- [x] **E2E mobile** (`tests/e2e/mobile-panel.spec.ts`, 6 testów): viewport 390×844 + `hasTouch`
+      — bottom sheet 55–65% vh, ArrowPad klikalne, drag-handle zamyka, focus-pending fokusuje mapę
+      (poll center ≈ 52.2297/21.0122); click działki → karta ≤70vw bez maplibre-popup; desktop
+      (1280×720, GPS denied): narrow sidebar ≥320px po prawej + seed z centroidu (52.151/21.23
+      po klik w mockowaną działkę i FAB).
+- [x] **Fixture `tests/e2e/fixtures/minimal.pmtiles`** (`6654bbc`): wygenerowana tippecanoe
+      (źródło: `tests/e2e/snap-vertex.spec.ts` — readFileSync na preexistującym brakującym pliku
+      powodowało **EN Mixing ENOENT** blokujące cały suite; wygenerowano z pmtiles warstwą `dzialki`
+      z=8, 627 B). Fixture jest ** committed** (mały, wygenerowany skryptem tippecanoe 2.79.0
+      z /root/tippecanoe).
+- [x] **MapView dev-hook** (`6654bbc`): `window.wycinkaMap` rejestrowany zaraz po konstrukcji mapy
+      (nie dopiero po `load`) — ułatwia/testuje E2E loty/fokusem zanim style/tiles się doładują
+      (dev tylko, produkcyjny brak zmian). Usunięte mock-approach `readFileSync` przy loadzie.
+- Gates: **typecheck ✓ / lint --max-warnings=0 ✓ / unit 386/386 ✓ / coverage 93.42 / 89.13 /
+  89.19% (progi 80/80/75 ✓) / build (PWA dist) ✓ / E2E 26/26 ✓** (full suite, w tym 6 nowych mobile).
+
+### ⚠️ Uwagi dla innych / dla nadzorcy
+
+- **Kolizja portu 5173:** dev-serwery z kilku worktree'ów (`/root/wycinka`, `/root/wt-multi-parcel`,
+  `/root/wt-ux-mobile`) walczą o ten sam port; `webServer.reuseExistingServer` w
+  `tests/e2e/playwright.config.ts` potrafi podłączyć się do **starego kodu** z cudzego worktree
+  (objaw: e2e "widzi" stare klasy/DOM mimo nowych commitów). Podczas sesji używałem własnej
+  instancji Vite na porcie 5199 (`--port 5199 --strictPort`, lokalna kopia configu, niezacommitowana).
+  Propozycja: parametryzacja portu przez env (np. `E2E_PORT`) lub per-worktree port.
+- Fixture `minimal.pmtiles` nigdy nie był w repo (sprzed tej sesji) — `snap-vertex.spec.ts` padał
+  na `readFileSync` (ENOENT) i blokował cały suite E2E. Wygenerowany binarnie przez tippecanoe,
+  deterministycznie (wektor `dzialki`, jeden feature na z=8, 627 B).
+- `window.wycinkaMap` rejestrowane teraz zaraz po utworzeniu mapy (nie po `load`) — style/tiles
+  moga się doładować z opóźnieniem, a testy/E2E mogają korzystać z `getCenter()/project()` od razu.
+  Zmiana tylko w `import.meta.env.MODE !== 'production'`.
+
 ## Legenda
 
 - `[ ]` todo

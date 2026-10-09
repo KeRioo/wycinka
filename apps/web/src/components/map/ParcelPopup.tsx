@@ -7,7 +7,7 @@ interface ParcelPopupProps {
 
 export default function ParcelPopup({ parcel }: ParcelPopupProps): JSX.Element {
   return (
-    <div className="min-w-[240px] space-y-2 text-sm text-forest-900">
+    <div className="min-w-0 space-y-2 text-sm text-forest-900 sm:min-w-[240px]">
       <header>
         <h3 className="text-base font-semibold text-forest-700">{parcel.teryt}</h3>
         <p className="text-xs text-stone-500">Numer działki: {parcel.number}</p>
