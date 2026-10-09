@@ -57,7 +57,7 @@ RUN apt-get update \
         libsqlite3-0 \
         zlib1g \
         libexpat1 \
-        libcurl4t64 \
+        libcurl4 \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 1000 etluser \
