@@ -265,6 +265,9 @@ export default function MapView({
       setStyleLoaded(true);
       setMap(map);
       onMapReady?.(map);
+      if (import.meta.env.MODE !== 'production') {
+        (window as unknown as Record<string, unknown>).wycinkaMap = map;
+      }
     });
 
     const handleClick = (e: MapLayerMouseEvent): void => {
@@ -284,6 +287,9 @@ export default function MapView({
       mapRef.current = null;
       setMap(null);
       setStyleLoaded(false);
+      if (import.meta.env.MODE !== 'production') {
+        delete (window as unknown as Record<string, unknown>).wycinkaMap;
+      }
     };
   }, [pmtilesUrl, initialCenter, initialZoom, onMapClick, onMapReady]);
 

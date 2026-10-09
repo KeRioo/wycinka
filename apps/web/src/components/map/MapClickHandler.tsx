@@ -49,13 +49,12 @@ export default function MapClickHandler({
   const { lookup } = useParcelLookup();
 
   const [map, setMap] = useState<MaplibreMap | null>(null);
-  const stateRef = useRef({ mode, map });
-  stateRef.current = { mode, map };
-
   const vertices = useMemo<LatLng[]>(
     () => (selectedParcel !== null ? extractVertexPoints(selectedParcel.geom) : []),
     [selectedParcel],
   );
+  const stateRef = useRef({ mode, map, vertices });
+  stateRef.current = { mode, map, vertices };
 
   const handleMapReady = useCallback(
     (ready: MaplibreMap): void => {
@@ -69,21 +68,19 @@ export default function MapClickHandler({
   const handleMapClick = useCallback(
     ({ lat, lng }: { lat: number; lng: number }): void => {
       if (stateRef.current.mode !== 'idle') {
-        const { map: currentMap } = stateRef.current;
+        const { map: currentMap, vertices: currentVertices } = stateRef.current;
         const threshold =
-          vertices.length > 0
-            ? currentMap !== null
-              ? snapThresholdMeters(currentMap.getZoom(), currentMap.getCenter().lat)
-              : SNAP_THRESHOLD_M
+          currentVertices.length > 0 && currentMap !== null
+            ? snapThresholdMeters(currentMap.getZoom(), currentMap.getCenter().lat)
             : SNAP_THRESHOLD_M;
-        const snapped = snapToVertex({ lat, lng }, vertices, threshold);
+        const snapped = snapToVertex({ lat, lng }, currentVertices, threshold);
         const pos = snapped !== null ? snapped.point : { lat, lng };
         setPendingPosition(pos);
         return;
       }
       void lookup(lat, lng);
     },
-    [lookup, vertices],
+    [lookup],
   );
 
   const pendingDrag = useMemo(
