@@ -14,7 +14,7 @@ import type { TreeFeatureProperties } from '@/components/map/MapView';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useMapStore } from '@/stores/mapStore';
-import { useProjectStore } from '@/stores/projectStore';
+import { ensureActiveProject, useProjectStore } from '@/stores/projectStore';
 import { draftPosition, useTreeStore } from '@/stores/treeStore';
 
 const DEFAULT_ZOOM = 13;
@@ -37,7 +37,12 @@ export default function MapPage(): JSX.Element {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projectsStatus = useProjectStore((s) => s.status);
   const loadProjects = useProjectStore((s) => s.loadProjects);
-  const createAndActivate = useProjectStore((s) => s.createAndActivate);
+  const projectParcels = useProjectStore((s) => s.projectParcels);
+  const loadProjectParcels = useProjectStore((s) => s.loadProjectParcels);
+  const addParcelToProject = useProjectStore((s) => s.addParcelToProject);
+  const removeParcelFromProject = useProjectStore((s) => s.removeParcelFromProject);
+  const toast = useProjectStore((s) => s.toast);
+  const setToast = useProjectStore((s) => s.setToast);
 
   const mode = useTreeStore((s) => s.mode);
   const pending = useTreeStore((s) => s.pending);
@@ -58,6 +63,22 @@ export default function MapPage(): JSX.Element {
   useEffect(() => {
     void loadProjects();
   }, [loadProjects]);
+
+  useEffect(() => {
+    void loadProjectParcels(activeProjectId);
+  }, [activeProjectId, loadProjectParcels]);
+
+  useEffect(() => {
+    if (toast === null) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setToast(null);
+    }, 4000);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [toast, setToast]);
 
   useEffect(() => {
     if (activeProjectId !== null && activeProjectId !== activeProjectIdFromTree) {
@@ -244,7 +265,7 @@ export default function MapPage(): JSX.Element {
   };
 
   const handleCreateProject = async (): Promise<void> => {
-    await createAndActivate('Mój pierwszy projekt');
+    await ensureActiveProject();
   };
 
   const hasProject = activeProjectId !== null && projects.length > 0;
@@ -291,7 +312,20 @@ export default function MapPage(): JSX.Element {
               </Button>
             </CardHeader>
             <CardContent className="p-3 pt-0">
-              <ParcelPopup parcel={selectedParcel} />
+              <ParcelPopup
+                parcel={selectedParcel}
+                action={
+                  projectParcels.some((p) => p.teryt === selectedParcel.teryt)
+                    ? { kind: 'remove' }
+                    : { kind: 'add', disabled: activeProjectId === null }
+                }
+                onAdd={(parcel) => {
+                  void addParcelToProject(parcel);
+                }}
+                onRemove={(teryt) => {
+                  void removeParcelFromProject(teryt);
+                }}
+              />
             </CardContent>
           </Card>
         )}
@@ -313,6 +347,16 @@ export default function MapPage(): JSX.Element {
           </Card>
         )}
       </aside>
+
+      {toast !== null && (
+        <div
+          role="alert"
+          data-testid="toast"
+          className="pointer-events-auto absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-md bg-stone-900/90 px-4 py-2 text-sm text-white shadow-lg"
+        >
+          {toast}
+        </div>
+      )}
 
       {hasProject && mode === 'idle' && (
         <Fab onClick={handleStartPlacing} />
@@ -353,6 +397,7 @@ export default function MapPage(): JSX.Element {
           open={pdfDialogOpen}
           project={activeProject}
           trees={trees}
+          parcels={projectParcels}
           onClose={() => {
             setPdfDialogOpen(false);
           }}
