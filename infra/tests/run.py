@@ -38,6 +38,14 @@ if __name__ == "__main__":
 	suite.addTests(loader.loadTestsFromTestCase(EtlScriptsTest))
 	suite.addTests(loader.loadTestsFromTestCase(EtlDockerfileTest))
 	suite.addTests(loader.loadTestsFromTestCase(EtlRunbookTest))
+	from infra.tests.test_auth_cors import (
+		CaddyAuthCorsTest,
+		EnvExampleAuthCorsTest,
+		NginxAuthCorsTest,
+	)
+	suite.addTests(loader.loadTestsFromTestCase(CaddyAuthCorsTest))
+	suite.addTests(loader.loadTestsFromTestCase(EnvExampleAuthCorsTest))
+	suite.addTests(loader.loadTestsFromTestCase(NginxAuthCorsTest))
 
 	runner = unittest.TextTestRunner(verbosity=2)
 	result = runner.run(suite)

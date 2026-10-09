@@ -25,7 +25,16 @@ services:
   web:
     build:
       context: ../apps/web
-      dockerfile: Dockerfile
+      # Dockerfile w infra (kopia apps/web/Dockerfile): apps/web/.dockerignore
+      # wyklucza nginx.conf zbudowanie własnego obiektu — patrz infra/web/Dockerfile
+      # w REQUESTS.md.
+      dockerfile: ../../infra/web/Dockerfile
+      additional_contexts:
+        infra: ../
+      # Prod PWA działa same-origin (caddy + basic auth): relatywny API base.
+      # Dev używa Vite dev serwa (VITE_API_URL w docker-compose.dev.yml).
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
     image: wycinka-web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
@@ -44,6 +53,15 @@ services:
     build: ./caddy
     image: wycinka-caddy:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-wycinka.app}
+      APP_ENV: ${APP_ENV:-production}
+      # CORS origin dla prod (dokładne dopasowanie). Dev (APP_ENV=development)
+      # ignoruje tę wartość — fallback na "*".
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://${DOMAIN:-wycinka.app}}
+      # bcrypt z `docker run --rm caddy:2-alpine caddy hash-password`;
+      # wymagany w APP_ENV=production (bez niego logowanie zawsze 401) — patrz runbook.
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-VALIDATE-MISSING-AUTH_PASSWORD_HASH}
     ports:
       - "80:80"
       - "443:443"
