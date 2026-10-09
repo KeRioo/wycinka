@@ -128,7 +128,9 @@
 		reverse_proxy web:80 {
 			header_up Host {host}
 			# Tryb PWA: agresywne cache dla zbudowanych assetów
-			header_down Cache-Control "public, max-age=3600"
+			# Nagłówki cache pochodzą z nginx (immutable/no-cache per asset class);
+			# nadpisywanie ich tutaj psuło no-cache dla index.html → browser wisi
+			# na starym bundle (znalezione we wdrożeniu na srv01).
 		}
 	}
 
