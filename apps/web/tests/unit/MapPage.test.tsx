@@ -14,6 +14,7 @@ const { mapInstance, popupMock } = vi.hoisted(() => {
     off: vi.fn(),
     remove: vi.fn(),
     flyTo: vi.fn(),
+    fitBounds: vi.fn(),
     addControl: vi.fn(),
     addSource: vi.fn(),
     addLayer: vi.fn(),
@@ -156,6 +157,30 @@ describe('MapPage', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText(MOCK_PARCEL.teryt)).toBeInTheDocument();
+  });
+
+  it('should fit the map to the parcel bbox with maxZoom 17 when parcel is selected', () => {
+    if (!MOCK_PARCEL) {
+      throw new Error('Mock parcel missing');
+    }
+    mapInstance.fitBounds.mockClear();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    callLatestLoadHandler();
+    act(() => {
+      useMapStore.getState().setSelectedParcel(MOCK_PARCEL);
+    });
+    expect(mapInstance.fitBounds).toHaveBeenCalledWith(
+      [
+        [MOCK_PARCEL.bbox[0], MOCK_PARCEL.bbox[1]],
+        [MOCK_PARCEL.bbox[2], MOCK_PARCEL.bbox[3]],
+      ],
+      { maxZoom: 17, padding: 60, duration: 800 },
+    );
+    expect(mapInstance.flyTo).not.toHaveBeenCalled();
   });
 });
 

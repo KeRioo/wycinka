@@ -16,8 +16,7 @@ import { useGeolocation } from '@/hooks/useGeolocation';
 import { useMapStore } from '@/stores/mapStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { draftPosition, useTreeStore } from '@/stores/treeStore';
-
-const DEFAULT_ZOOM = 13;
+import { parcelFitBounds } from '@/lib/geo';
 
 export default function MapPage(): JSX.Element {
   const [mapReady, setMapReady] = useState(false);
@@ -139,11 +138,10 @@ export default function MapPage(): JSX.Element {
     popupRootRef.current ??= createRoot(popupContainerRef.current);
     popupRootRef.current.render(<ParcelPopup parcel={selectedParcel} />);
 
-    map.flyTo({
-      center: [selectedParcel.centroid[0], selectedParcel.centroid[1]],
-      zoom: DEFAULT_ZOOM,
-      duration: 800,
-    });
+    const bounds = parcelFitBounds(selectedParcel.bbox, selectedParcel.geom);
+    if (bounds !== null) {
+      map.fitBounds(bounds, { padding: 60, maxZoom: 17, duration: 800 });
+    }
 
     return () => {
       popup.remove();

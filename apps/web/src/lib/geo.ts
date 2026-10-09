@@ -1,3 +1,55 @@
+import type { BBox, Geometry } from '@/services/api.types';
+
+export type FitBoundsPair = [[number, number], [number, number]];
+
+function isValidBBox(bbox: unknown): bbox is BBox {
+  return (
+    Array.isArray(bbox) &&
+    bbox.length === 4 &&
+    bbox.every((v) => typeof v === 'number' && Number.isFinite(v))
+  );
+}
+
+export function geometryBounds(geom: Geometry): BBox | null {
+  const lngs: number[] = [];
+  const lats: number[] = [];
+
+  const walk = (node: unknown): void => {
+    if (!Array.isArray(node)) {
+      return;
+    }
+    const items: unknown[] = node;
+    const [lng, lat] = items;
+    if (typeof lng === 'number' && typeof lat === 'number') {
+      lngs.push(lng);
+      lats.push(lat);
+      return;
+    }
+    for (const child of items) {
+      walk(child);
+    }
+  };
+  walk(geom.coordinates);
+
+  if (lngs.length === 0) {
+    return null;
+  }
+  const minLng = Math.min(...lngs);
+  const minLat = Math.min(...lats);
+  return [minLng, minLat, Math.max(...lngs), Math.max(...lats)];
+}
+
+export function parcelFitBounds(bbox: unknown, geom: Geometry): FitBoundsPair | null {
+  const valid = isValidBBox(bbox) ? bbox : geometryBounds(geom);
+  if (!valid) {
+    return null;
+  }
+  return [
+    [valid[0], valid[1]],
+    [valid[2], valid[3]],
+  ];
+}
+
 const EARTH_RADIUS_M = 6_371_008.8;
 const DEG_TO_RAD = Math.PI / 180;
 const METERS_PER_DEG_LAT = 111_320;
