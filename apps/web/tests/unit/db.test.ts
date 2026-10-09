@@ -5,10 +5,17 @@ import {
   db,
   deleteProject,
   deleteTree,
+  getProject,
   listProjects,
   listTrees,
   updateTree,
+  updateRangesConfig,
+  updateSpeciesConfig,
+  DEFAULT_PDF_PREFS,
+  DEFAULT_RANGES,
+  DEFAULT_SPECIES,
 } from '@/db/schema';
+import { normalizeProjectConfig } from '@/db/schema';
 import { CURRENT_VERSION, runMigrations } from '@/db/migrations';
 
 describe('Dexie schema', () => {
@@ -119,11 +126,113 @@ describe('migrations', () => {
     }
   });
 
-  it('should expose current version constant', () => {
-    expect(CURRENT_VERSION).toBeGreaterThanOrEqual(1);
+  it('should expose current version constant matching Dexie schema version', () => {
+    expect(CURRENT_VERSION).toBe(2);
+    expect(db.verno).toBe(2);
   });
 
   it('should run without throwing on open db', async () => {
     await expect(runMigrations(db)).resolves.not.toThrow();
+  });
+
+  it('should normalize legacy project missing pdfPrefs', () => {
+    const normalized = normalizeProjectConfig({
+      id: 'legacy-1',
+      name: 'Stary las',
+      speciesConfig: undefined,
+    });
+    expect(normalized.pdfPrefs).toEqual(DEFAULT_PDF_PREFS);
+    expect(normalized.speciesConfig).toEqual([...DEFAULT_SPECIES]);
+    expect(normalized.rangesConfig).toEqual([...DEFAULT_RANGES]);
+    expect(normalized.name).toBe('Stary las');
+  });
+
+  it('should keep provided config during normalization', () => {
+    const pdfPrefs = { ...DEFAULT_PDF_PREFS, layout: 'combined' as const };
+    const species = [{ name: 'Głóg', color: '#ff0000' }];
+    const ranges = [{ from: 0, to: 100, label: 'wszystko' }];
+    const normalized = normalizeProjectConfig({
+      id: 'legacy-2',
+      name: 'Nowy las',
+      pdfPrefs,
+      speciesConfig: species,
+      rangesConfig: ranges,
+      createdAt: new Date('2026-01-01T10:00:00Z'),
+      updatedAt: new Date('2026-01-02T10:00:00Z'),
+    });
+    expect(normalized.pdfPrefs.layout).toBe('combined');
+    expect(normalized.speciesConfig).toEqual(species);
+    expect(normalized.rangesConfig).toEqual(ranges);
+    expect(normalized.createdAt).toEqual(new Date('2026-01-01T10:00:00Z'));
+  });
+
+  it('should default empty species list to defaults on normalization', () => {
+    const normalized = normalizeProjectConfig({
+      id: 'legacy-3',
+      name: 'x',
+      speciesConfig: [],
+    });
+    expect(normalized.speciesConfig.length).toBeGreaterThan(0);
+  });
+
+  it('should normalize project with missing name', () => {
+    const normalized = normalizeProjectConfig({ id: 'legacy-4' });
+    expect(normalized.name).toBe('Bez nazwy');
+  });
+});
+
+describe('project config updates', () => {
+  beforeEach(async () => {
+    db.delete();
+    await db.open();
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+  });
+
+  async function seededProject(): Promise<string> {
+    const project = await createProject({ name: 'Konfig las' });
+    return project.id;
+  }
+
+  it('should update species config replacing default list', async () => {
+    const id = await seededProject();
+    const species = [
+      { name: 'Sosna', color: '#15803d' },
+      { name: 'Dąb', color: '#92400e' },
+    ];
+    const updated = await updateSpeciesConfig(id, species);
+    const stored = await getProject(id);
+    expect(updated.speciesConfig).toEqual(species);
+    expect(stored?.speciesConfig).toEqual(species);
+  });
+
+  it('should update ranges config replacing default ranges', async () => {
+    const id = await seededProject();
+    const ranges = [
+      { from: 0, to: 30, label: 'wąskie' },
+      { from: 30, to: Number.POSITIVE_INFINITY, label: 'grube' },
+    ];
+    const updated = await updateRangesConfig(id, ranges);
+    expect(updated.rangesConfig).toEqual(ranges);
+  });
+
+  it('should not touch other fields when updating config', async () => {
+    const id = await seededProject();
+    const before = await getProject(id);
+    await updateSpeciesConfig(id, [{ name: 'Brzoza', color: '#fef3c7' }]);
+    await updateRangesConfig(id, [{ from: 0, to: 999, label: 'x' }]);
+    const after = await getProject(id);
+    expect(after?.name).toBe('Konfig las');
+    expect(after?.createdAt).toEqual(before?.createdAt);
+    expect(after?.pdfPrefs).toEqual(before?.pdfPrefs);
+  });
+
+  it('should throw when updating config of non-existent project', async () => {
+    await expect(updateSpeciesConfig('ghost', [])).rejects.toThrow('nie istnieje');
+    await expect(updateRangesConfig('ghost', [])).rejects.toThrow('nie istnieje');
   });
 });

@@ -62,6 +62,7 @@ coverage/
 coverage.xml
 **/coverage.xml
 .nyc_output/
+.playwright-mcp/
 
 # Cloudflare tunnel credentials
 infra/cloudflared/*.json

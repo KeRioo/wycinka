@@ -29,6 +29,12 @@ export default function ParcelPopup({ parcel }: ParcelPopupProps): JSX.Element {
         )}
         <dt className="font-medium text-stone-600">Pow.:</dt>
         <dd>{formatArea(parcel.area_m2)}</dd>
+        <dt className="font-medium text-stone-600">Kody TERYT:</dt>
+        <dd className="font-mono text-xs">
+          {parcel.voivodeship_code}·{parcel.county_code}·{parcel.commune_code}
+        </dd>
+        <dt className="font-medium text-stone-600">Źródło:</dt>
+        <dd className="text-xs">{parcel.datasource}</dd>
         <dt className="font-medium text-stone-600">Centroid:</dt>
         <dd className="font-mono text-xs">{formatCoordinate(parcel.centroid[1], parcel.centroid[0])}</dd>
       </dl>

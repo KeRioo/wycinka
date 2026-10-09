@@ -35,6 +35,10 @@ export const MOCK_PARCEL_FOUND: ParcelResponse = {
     bbox: [21.006, 52.231, 21.007, 52.232],
     centroid: [21.0065, 52.2315],
     fetched_at: '2026-09-29T03:00:00Z',
+    voivodeship_code: '14',
+    county_code: '12',
+    commune_code: '01',
+    datasource: 'uldk',
   },
 };
 

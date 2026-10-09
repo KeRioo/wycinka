@@ -64,7 +64,44 @@ export class WycinkaDB extends Dexie {
       projects: 'id, name, createdAt, updatedAt',
       trees: 'id, projectId, species, capturedAt',
     });
+    this.version(2)
+      .stores({
+        projects: 'id, name, createdAt, updatedAt',
+        trees: 'id, projectId, species, capturedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx.table('projects').toCollection().modify((raw: unknown) => {
+          if (isProjectLike(raw)) {
+            return normalizeProjectConfig(raw);
+          }
+          return raw;
+        });
+      });
   }
+}
+
+function isProjectLike(raw: unknown): raw is { id: string } {
+  return typeof raw === 'object' && raw !== null && 'id' in raw;
+}
+
+export function normalizeProjectConfig(project: Partial<Project> & { id: string }): Project {
+  return {
+    id: project.id,
+    name: typeof project.name === 'string' ? project.name : 'Bez nazwy',
+    ...(project.teryt !== undefined ? { teryt: project.teryt } : {}),
+    ...(project.polygon !== undefined ? { polygon: project.polygon } : {}),
+    ...(project.bbox !== undefined ? { bbox: project.bbox } : {}),
+    speciesConfig: Array.isArray(project.speciesConfig) && project.speciesConfig.length > 0
+      ? project.speciesConfig
+      : [...DEFAULT_SPECIES],
+    rangesConfig: Array.isArray(project.rangesConfig) && project.rangesConfig.length > 0
+      ? project.rangesConfig
+      : [...DEFAULT_RANGES],
+    pdfPrefs: { ...DEFAULT_PDF_PREFS, ...project.pdfPrefs },
+    ...(project.uldkMeta !== undefined ? { uldkMeta: project.uldkMeta } : {}),
+    createdAt: project.createdAt ?? new Date(0),
+    updatedAt: new Date(),
+  };
 }
 
 export const DEFAULT_SPECIES: readonly SpeciesConfig[] = [
@@ -177,6 +214,26 @@ export async function updatePdfPrefs(id: string, prefs: PdfPrefs): Promise<Proje
     throw new Error(`Projekt ${id} nie istnieje`);
   }
   const next: Project = { ...existing, pdfPrefs: prefs, updatedAt: new Date() };
+  await db.projects.put(next);
+  return next;
+}
+
+export async function updateSpeciesConfig(id: string, species: SpeciesConfig[]): Promise<Project> {
+  const existing = await db.projects.get(id);
+  if (existing === undefined) {
+    throw new Error(`Projekt ${id} nie istnieje`);
+  }
+  const next: Project = { ...existing, speciesConfig: species, updatedAt: new Date() };
+  await db.projects.put(next);
+  return next;
+}
+
+export async function updateRangesConfig(id: string, ranges: RangeConfig[]): Promise<Project> {
+  const existing = await db.projects.get(id);
+  if (existing === undefined) {
+    throw new Error(`Projekt ${id} nie istnieje`);
+  }
+  const next: Project = { ...existing, rangesConfig: ranges, updatedAt: new Date() };
   await db.projects.put(next);
   return next;
 }

@@ -1,6 +1,6 @@
 import { WycinkaDB } from './schema';
 
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
 
 interface MigrationStep {
   version: number;

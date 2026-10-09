@@ -42,6 +42,10 @@ export interface Parcel {
   region_name: string;
   area_m2: number;
   land_use: string | null;
+  voivodeship_code: string;
+  county_code: string;
+  commune_code: string;
+  datasource: string;
   geom: Geometry;
   bbox: BBox;
   centroid: LngLat;
