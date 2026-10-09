@@ -455,3 +455,12 @@ Trigger `parcels_rtree_delete` (AFTER DELETE ON parcels) najpierw czyścił `par
 - E2E Playwright dla flow ustawień i backup/restore (unit pokryty; E2E Zalecane przy okazji M10).
 - MSW mock dla /parcel zwraca kody TERYT — brak porównania z realnym backendem w testach (nie wymagane kontraktem).
 - Upgrade callback Dexie v2: real-device test tylko ręcznie (fake-indexeddb nie wykonuje upgrade functions) — test jednostkowy normalizatora zastępuje.
+
+## [CI agent] feat/ci-workflow (2026-10-09)
+- Dodano `.github/workflows/ci.yml`: 5 jobów (api, web, infra, etl, e2e).
+- Trigger: push main + PR + workflow_dispatch; e2e tylko pull_request / dispatch / push main.
+- `permissions: contents: read` (least privilege) + concurrency cancel-in-progress.
+- api: ruff check + pytest --cov z --cov-fail-under=80. web: typecheck/lint/test:coverage (thresholds z vitest.config.ts są wymuszane automatycznie)/build, cache npm z package-lock.json. etl: pytest. infra: python3 tests/run.py.
+- e2e: playwright config ma webServer `npm run dev` → w jobie `npx playwright install --with-deps chromium`; upload raportu jako artifact przy failure.
+- Walidacja: YAML parsuje się (yaml.safe_load), wersje actions: checkout@v4, setup-python@v5, setup-node@v4, upload-artifact@v4.
+- Commit 8da0cf2 — nie mergować do main (nadzorca).
