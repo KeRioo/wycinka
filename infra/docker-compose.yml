@@ -76,6 +76,36 @@ services:
       caddy:
         condition: service_healthy
 
+  etl:
+    build:
+      context: ../scripts/sync-egib
+      dockerfile: ../../infra/etl/Dockerfile
+    image: wycinka-etl:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    user: etluser
+    environment:
+      EGIB_DATA_DIR: /app/data
+      EGIB_LOG_JSON: "true"
+      ETL_INTERVAL_SECONDS: ${ETL_INTERVAL_SECONDS:-86400}
+      ETL_REPORT_KEEP: ${ETL_REPORT_KEEP:-5}
+      EGIB_DOWNLOAD__MAX_RETRIES: ${EGIB_DOWNLOAD_RETRIES:-3}
+    volumes:
+      - api-data:/app/data
+      - ./etl/run-sync.sh:/usr/local/bin/run-sync.sh:ro
+      - ./etl/scheduler.sh:/usr/local/bin/scheduler.sh:ro
+      - ./etl/etl-healthcheck.sh:/usr/local/bin/etl-healthcheck.sh:ro
+    command: ["/bin/bash", "/usr/local/bin/scheduler.sh"]
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD-SHELL", "bash /usr/local/bin/etl-healthcheck.sh"]
+      interval: 300s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - etl-net
+
 volumes:
   api-data:
   caddy-data:
@@ -83,4 +113,6 @@ volumes:
 
 networks:
   wycinka-net:
+    driver: bridge
+  etl-net:
     driver: bridge
