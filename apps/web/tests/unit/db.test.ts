@@ -1,20 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   addTree,
+  addParcelToProjectDb,
   createProject,
   db,
   deleteProject,
   deleteTree,
+  findParcelInProject,
   getProject,
   listProjects,
+  listProjectParcels,
   listTrees,
+  removeParcelFromProjectDb,
+  countProjectParcels,
   updateTree,
   updateRangesConfig,
   updateSpeciesConfig,
   DEFAULT_PDF_PREFS,
   DEFAULT_RANGES,
   DEFAULT_SPECIES,
+  MAX_PARCELS_PER_PROJECT,
 } from '@/db/schema';
+import type { Parcel } from '@/services/api.types';
 import { normalizeProjectConfig } from '@/db/schema';
 import { CURRENT_VERSION, runMigrations } from '@/db/migrations';
 
@@ -127,8 +134,8 @@ describe('migrations', () => {
   });
 
   it('should expose current version constant matching Dexie schema version', () => {
-    expect(CURRENT_VERSION).toBe(2);
-    expect(db.verno).toBe(2);
+    expect(CURRENT_VERSION).toBe(3);
+    expect(db.verno).toBe(3);
   });
 
   it('should run without throwing on open db', async () => {
@@ -234,5 +241,108 @@ describe('project config updates', () => {
   it('should throw when updating config of non-existent project', async () => {
     await expect(updateSpeciesConfig('ghost', [])).rejects.toThrow('nie istnieje');
     await expect(updateRangesConfig('ghost', [])).rejects.toThrow('nie istnieje');
+  });
+});
+
+describe('project parcels (schema v3)', () => {
+  const BASE_PARCEL: Parcel = {
+    id: '141201_1.0001.6509',
+    teryt: '141201_1.0001.6509',
+    number: '6509',
+    voivodeship: 'mazowieckie',
+    county: 'Warszawa',
+    commune: 'Śródmieście',
+    region: '0001',
+    region_name: 'Obręb 0001',
+    area_m2: 1234.56,
+    land_use: 'Ls',
+    geom: { type: 'Polygon', coordinates: [[[21.006, 52.231], [21.007, 52.231], [21.007, 52.232], [21.006, 52.231]]] },
+    bbox: [21.006, 52.231, 21.007, 52.232],
+    centroid: [21.0065, 52.2315],
+    fetched_at: '2026-09-29T03:00:00Z',
+    voivodeship_code: '14',
+    county_code: '12',
+    commune_code: '01',
+    datasource: 'uldk',
+  };
+
+  function makeParcel(teryt: string): Parcel {
+    return { ...BASE_PARCEL, id: teryt, teryt, centroid: [BASE_PARCEL.centroid[0], BASE_PARCEL.centroid[1]] };
+  }
+
+  beforeEach(async () => {
+    db.delete();
+    await db.open();
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+  });
+
+  it('should add parcel snapshot to project', async () => {
+    const project = await createProject({ name: 'Test' });
+    const row = await addParcelToProjectDb(project.id, makeParcel('141201_1.0001.6509'));
+    expect(row.teryt).toBe('141201_1.0001.6509');
+    expect(row.snapshot.number).toBe('6509');
+    expect(row.addedAt).toBeInstanceOf(Date);
+    expect(await countProjectParcels(project.id)).toBe(1);
+  });
+
+  it('should not duplicate parcel with same teryt', async () => {
+    const project = await createProject({ name: 'Test' });
+    await addParcelToProjectDb(project.id, makeParcel('A'));
+    const again = await addParcelToProjectDb(project.id, makeParcel('A'));
+    expect(await countProjectParcels(project.id)).toBe(1);
+    expect(again).toBeDefined();
+  });
+
+  it('should store multiple parcels of a project', async () => {
+    const project = await createProject({ name: 'Test' });
+    await addParcelToProjectDb(project.id, makeParcel('A'));
+    await addParcelToProjectDb(project.id, makeParcel('B'));
+    const parcels = await listProjectParcels(project.id);
+    expect(parcels.map((row) => row.teryt).sort()).toEqual(['A', 'B']);
+  });
+
+  it('should reject adding more than 20 parcels', async () => {
+    const project = await createProject({ name: 'Test' });
+    for (let i = 1; i <= MAX_PARCELS_PER_PROJECT; i++) {
+      await addParcelToProjectDb(project.id, makeParcel(`A${String(i)}`));
+    }
+    await expect(addParcelToProjectDb(project.id, makeParcel('21'))).rejects.toThrow('Limit 20');
+  });
+
+  it('should remove parcel by teryt', async () => {
+    const project = await createProject({ name: 'Test' });
+    await addParcelToProjectDb(project.id, makeParcel('A'));
+    await addParcelToProjectDb(project.id, makeParcel('B'));
+    await removeParcelFromProjectDb(project.id, 'A');
+    const parcels = await listProjectParcels(project.id);
+    expect(parcels.map((row) => row.teryt)).toEqual(['B']);
+  });
+
+  it('should find parcel by teryt', async () => {
+    const project = await createProject({ name: 'Test' });
+    await addParcelToProjectDb(project.id, makeParcel('A'));
+    expect((await findParcelInProject(project.id, 'A'))?.teryt).toBe('A');
+    expect(await findParcelInProject(project.id, 'ghost')).toBeUndefined();
+  });
+
+  it('should cascade delete project parcels with project', async () => {
+    const project = await createProject({ name: 'Test' });
+    await addParcelToProjectDb(project.id, makeParcel('A'));
+    await deleteProject(project.id);
+    expect(await listProjectParcels(project.id)).toHaveLength(0);
+  });
+
+  it('should keep other project parcels when cascading', async () => {
+    const a = await createProject({ name: 'A' });
+    const b = await createProject({ name: 'B' });
+    await addParcelToProjectDb(a.id, makeParcel('A'));
+    await addParcelToProjectDb(b.id, makeParcel('B'));
+    await deleteProject(a.id);
+    expect((await listProjectParcels(b.id)).map((row) => row.teryt)).toEqual(['B']);
   });
 });

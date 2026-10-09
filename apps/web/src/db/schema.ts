@@ -1,5 +1,7 @@
 import Dexie, { type Table } from 'dexie';
-import type { Geometry } from '@/services/api.types';
+import type { Geometry, Parcel } from '@/services/api.types';
+
+export const MAX_PARCELS_PER_PROJECT = 20;
 
 export interface PdfPrefs {
   layout: 'single' | 'combined' | 'one-per-page';
@@ -54,9 +56,18 @@ export interface Tree {
   notes?: string;
 }
 
+export interface ProjectParcel {
+  id: string;
+  projectId: string;
+  teryt: string;
+  snapshot: Parcel;
+  addedAt: Date;
+}
+
 export class WycinkaDB extends Dexie {
   projects!: Table<Project, string>;
   trees!: Table<Tree, string>;
+  project_parcels!: Table<ProjectParcel, string>;
 
   constructor() {
     super('wycinka');
@@ -77,6 +88,11 @@ export class WycinkaDB extends Dexie {
           return raw;
         });
       });
+    this.version(3).stores({
+      projects: 'id, name, createdAt, updatedAt',
+      trees: 'id, projectId, species, capturedAt',
+      project_parcels: 'id, projectId, teryt, addedAt',
+    });
   }
 }
 
@@ -176,10 +192,60 @@ export async function getProject(id: string): Promise<Project | undefined> {
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  await db.transaction('rw', db.projects, db.trees, async () => {
+  await db.transaction('rw', db.projects, db.trees, db.project_parcels, async () => {
     await db.trees.where('projectId').equals(id).delete();
+    await db.project_parcels.where('projectId').equals(id).delete();
     await db.projects.delete(id);
   });
+}
+
+export async function countProjectParcels(projectId: string): Promise<number> {
+  return db.project_parcels.where('projectId').equals(projectId).count();
+}
+
+export async function listProjectParcels(projectId: string): Promise<ProjectParcel[]> {
+  return db.project_parcels.where('projectId').equals(projectId).toArray();
+}
+
+export async function addParcelToProjectDb(projectId: string, parcel: Parcel): Promise<ProjectParcel> {
+  const existing = await db.project_parcels
+    .where('projectId')
+    .equals(projectId)
+    .filter((row) => row.teryt === parcel.teryt)
+    .toArray();
+  if (existing.length > 0) {
+    return existing[0];
+  }
+  const count = await countProjectParcels(projectId);
+  if (count >= MAX_PARCELS_PER_PROJECT) {
+    throw new Error(`Limit ${String(MAX_PARCELS_PER_PROJECT)} działek na projekt`);
+  }
+  const row: ProjectParcel = {
+    id: crypto.randomUUID(),
+    projectId,
+    teryt: parcel.teryt,
+    snapshot: parcel,
+    addedAt: new Date(),
+  };
+  await db.project_parcels.add(row);
+  return row;
+}
+
+export async function removeParcelFromProjectDb(projectId: string, teryt: string): Promise<void> {
+  const rows = await db.project_parcels
+    .where('projectId')
+    .equals(projectId)
+    .filter((row) => row.teryt === teryt)
+    .toArray();
+  await db.project_parcels.bulkDelete(rows.map((row) => row.id));
+}
+
+export async function findParcelInProject(projectId: string, teryt: string): Promise<ProjectParcel | undefined> {
+  return db.project_parcels
+    .where('projectId')
+    .equals(projectId)
+    .filter((row) => row.teryt === teryt)
+    .first();
 }
 
 export async function addTree(tree: Omit<Tree, 'id' | 'capturedAt'> & { capturedAt?: Date }): Promise<Tree> {
