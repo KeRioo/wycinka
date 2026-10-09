@@ -56,6 +56,9 @@ RUN apt-get update \
         bash \
         libsqlite3-0 \
         zlib1g \
+        libexpat1 \
+        libcurl4t64 \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 1000 etluser \
     && useradd --system --uid 1000 --gid etluser --create-home --shell /usr/sbin/nologin etluser
