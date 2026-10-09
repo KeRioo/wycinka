@@ -5,6 +5,8 @@ async function createActiveProject(page: Page): Promise<void> {
   await expect(page.getByTestId('new-project')).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(300);
   await page.getByTestId('new-project').click();
+  await expect(page.getByTestId('create-dialog')).toBeVisible();
+  await page.getByTestId('create-save').click();
   await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
 }
 
@@ -134,6 +136,8 @@ test.describe('Settings flows (BACKLOG C)', () => {
     await page.goto('/projects');
     await page.waitForTimeout(300);
     await page.getByTestId('new-project').click();
+    await expect(page.getByTestId('create-dialog')).toBeVisible();
+    await page.getByTestId('create-save').click();
     await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
 
     await page.goto('/settings');
