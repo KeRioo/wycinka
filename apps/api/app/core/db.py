@@ -63,7 +63,17 @@ CREATE INDEX IF NOT EXISTS idx_parcels_rtree_map_parcel
   ON parcels_rtree_map(parcel_id);
 """
 
-RTREE_TRIGGERS_SQL = """
+RTREE_DELETE_TRIGGER_SQL = """
+CREATE TRIGGER IF NOT EXISTS parcels_rtree_delete AFTER DELETE ON parcels
+BEGIN
+  DELETE FROM parcels_rtree WHERE id = (
+    SELECT rtree_id FROM parcels_rtree_map WHERE parcel_id = OLD.id
+  );
+  DELETE FROM parcels_rtree_map WHERE parcel_id = OLD.id;
+END;
+"""
+
+RTREE_INSERT_TRIGGER_SQL = """
 CREATE TRIGGER IF NOT EXISTS parcels_rtree_insert AFTER INSERT ON parcels
 BEGIN
   INSERT INTO parcels_rtree (min_lng, max_lng, min_lat, max_lat)
@@ -73,15 +83,9 @@ BEGIN
   INSERT INTO parcels_rtree_map (parcel_id, rtree_id)
   VALUES (NEW.id, last_insert_rowid());
 END;
-
-CREATE TRIGGER IF NOT EXISTS parcels_rtree_delete AFTER DELETE ON parcels
-BEGIN
-  DELETE FROM parcels_rtree_map WHERE parcel_id = OLD.id;
-  DELETE FROM parcels_rtree WHERE id = (
-    SELECT rtree_id FROM parcels_rtree_map WHERE parcel_id = OLD.id
-  );
-END;
 """
+
+RTREE_TRIGGERS_SQL = RTREE_INSERT_TRIGGER_SQL + RTREE_DELETE_TRIGGER_SQL
 
 SYNC_META_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS sync_meta (
