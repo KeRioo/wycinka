@@ -9,10 +9,10 @@ export default function Compass({ size, rotationDeg }: CompassProps): JSX.Elemen
   const half = size / 2;
   const radius = half - 10;
   const needle = compassNeedle(half, half, radius, rotationDeg);
-  const labelAngle = ((rotationDeg - 90) * Math.PI) / 180;
   const labelRadius = radius + 7;
-  const labelX = half + labelRadius * Math.cos(labelAngle);
-  const labelY = half + labelRadius * Math.sin(labelAngle);
+  const needleAngle = Math.atan2(needle.northY - half, needle.northX - half);
+  const labelX = half + labelRadius * Math.cos(needleAngle);
+  const labelY = half + labelRadius * Math.sin(needleAngle);
 
   return (
     <svg
