@@ -38,7 +38,7 @@ RUN chown -R nginx:nginx /usr/share/nginx/html && \
              /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp \
              /var/cache/nginx/scgi_temp /var/run/nginx \
     && chown -R nginx:nginx /var/cache/nginx /var/run/nginx \
-    && sed -i "s|pid /run/nginx.pid;|pid /var/run/nginx/nginx.pid;|" /etc/nginx/nginx.conf
+    && sed -i -E "s|pid[[:space:]]+/run/nginx\.pid;|pid /var/run/nginx/nginx.pid;|" /etc/nginx/nginx.conf
 
 USER nginx
 
