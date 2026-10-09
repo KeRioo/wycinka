@@ -171,6 +171,16 @@ export async function updateTree(id: string, patch: TreeUpdate): Promise<Tree> {
   return next;
 }
 
+export async function updatePdfPrefs(id: string, prefs: PdfPrefs): Promise<Project> {
+  const existing = await db.projects.get(id);
+  if (existing === undefined) {
+    throw new Error(`Projekt ${id} nie istnieje`);
+  }
+  const next: Project = { ...existing, pdfPrefs: prefs, updatedAt: new Date() };
+  await db.projects.put(next);
+  return next;
+}
+
 export async function deleteTree(id: string): Promise<void> {
   await db.trees.delete(id);
 }

@@ -390,3 +390,23 @@ TODO dla następnego etapu:
 ### Uwagi dla innych
 - etl pisze do `data/egib-raw`, `data/work`, `data/pmtiles`, `data/sqlite` we wspolnym wolumenie `api-data`; api czyta `pmtiles/dzialki.pmtiles` i `sqlite/parcels.sqlite` — backend: sciezki sa pod `/app/data/...`.
 - Filtrowanie powiatow: `docker compose run --rm etl /usr/local/bin/run-sync.sh --powiat <teryt>`.
+
+## Frontend (Milestone 5 — Kreator PDF) — branch feat/frontend-pdf
+
+- [x] Eksport PDF (jsPDF, wektorowo, bez html2canvas): przycisk "Eksportuj PDF" na mapie (MapPage, disabled przy 0 drzew), modal `PdfExportDialog` (UI po polsku)
+- [x] Layouty per `project.pdfPrefs.layout`: single (mapa+tabela zbiorcza, lista na kolejnej stronie), combined (wszystko na jednej), one-per-page (sekcje na osobnych stronach) + `tableOnSeparatePage` / `showNumberedTable` / `autoRotate`; plan stron w `src/lib/pdf/pagePlan.ts`
+- [x] Markery: kolor wg gatunku (getSpeciesColor), rozmiar wg obwodu (markerSizeForCm), opcjonalne numerowanie; poligon działki wektorowo
+- [x] Kompas SVG (`src/components/pdf/Compass.tsx`, `src/lib/pdf/compass.ts`): północ prawdziwa, uwzględnia obrót mapy; podgląd w dialogu
+- [x] Auto-obrót mapy 0–85° (`chooseRotation`, minimalizacja bbox), projekcja WGS84→mm (`makeProjector`, północ u góry)
+- [x] Tabela zbiorcza gatunek × przedziały obwodów (agregacja, fallback 'Inne'), pełna lista numerowana (nr, gatunek, obwód, lokalizacja, paginacja), stopka: data / liczba drzew / suma obwodów; nazwa pliku `wycinka-<slug>-<data>.pdf`
+- [x] Zapis preferencji: `updatePdfPrefs` (db/schema) + `savePdfPrefs` (projectStore) — zapis przy generowaniu
+- [x] Deps: `jspdf@^4.2.1` (html2canvas niepotrzebny — rendering wektorowy jsPDF)
+- Testy: **267/267 unit pass** (55 nowych: pagePlan, rangesTable/agregacja, geometry/projekcja+rotacja, compass, pdfReport z mockiem jsPDF, PdfExportDialog, Compass, MapPage-przycisk)
+- Coverage: **91.44% lines / 87.22% functions / 87.26% branches** (src/lib/pdf: 97.18% lines); typecheck/lint/build clean
+- Commits: `e311d2f` (feat), `99ffad9` (test) — nie mergowane do main
+
+### TODO (resztki)
+
+- Skala liniowa (scale bar) i legenda gatunków na mapie PDF — nie w zakresie milestone
+- TERYT/pole działki w nagłówku tylko gdy projekt ma działkę z ULDK (obecnie '—')
+- Paginacja dużej tabeli zbiorczej przy bardzo wielu gatunkach (obecnie pojedyncza strona OK do ~25 gatunków)
