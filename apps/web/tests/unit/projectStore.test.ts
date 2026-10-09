@@ -270,3 +270,42 @@ describe('useProjectStore parcels', () => {
     expect(await db.project_parcels.count()).toBe(0);
   });
 });
+
+describe('useProjectStore renameProject', () => {
+  beforeEach(async () => {
+    db.delete();
+    await db.open();
+    useProjectStore.getState().clear();
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+  });
+
+  it('should rename project and keep it in projects list', async () => {
+    const project = await useProjectStore.getState().createAndActivate('Las A');
+    const ok = await useProjectStore.getState().renameProject(project.id, 'Las B');
+    expect(ok).toBe(true);
+    expect(useProjectStore.getState().projects[0]?.name).toBe('Las B');
+    const stored = await db.projects.get(project.id);
+    expect(stored?.name).toBe('Las B');
+  });
+
+  it('should set toast and not change name on invalid input', async () => {
+    const project = await useProjectStore.getState().createAndActivate('Las A');
+    const ok = await useProjectStore.getState().renameProject(project.id, '   ');
+    expect(ok).toBe(false);
+    expect(useProjectStore.getState().toast).toContain('od 1 do 100');
+    expect(useProjectStore.getState().projects[0]?.name).toBe('Las A');
+  });
+
+  it('should reassign active project name while keeping active id', async () => {
+    const project = await useProjectStore.getState().createAndActivate('Aktywny');
+    useProjectStore.getState().setActive(project.id);
+    await useProjectStore.getState().renameProject(project.id, 'Zmieniony');
+    expect(useProjectStore.getState().activeProjectId).toBe(project.id);
+    expect(useProjectStore.getState().getActive()?.name).toBe('Zmieniony');
+  });
+});

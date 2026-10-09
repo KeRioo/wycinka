@@ -2,6 +2,36 @@
 
 > Aktualizowane przez każdego subagenta po zakończeniu zadania.
 
+## Frontend (rename projektu) — branch `feat/rename-project`, worktree `/root/wt-rename` (2026-10-09)
+
+Commity (atomowe): `6ec14b1` → `b7eee30` → `6cbacbe` → `587beb8` → `2f0dd2b` (+ `fix(e2e)` fixture).
+
+- [x] **Dexie helper `renameProject(id, name)`** (`6ec14b1`, `b7eee30`): `db/schema.ts` — zod
+      `projectNameSchema` (trim, 1–100 znaków, komunikat „Nazwa projektu musi mieć od 1 do 100 znaków"),
+      return `{ok:true, project} | {ok:false, error}` (brak throw), persist z nowym `updatedAt`. Store
+      `projectStore.renameProject(id, name): Promise<boolean>` — toast na błąd, update `projects`,
+      aktywny projekt (id, getActive) nadpisuje nazwę, `activeProjectId` bez zmian.
+- [x] **UI /projects** (`6cbacbe`): akcja „Edytuj nazwę" (ikona ✏️ `Pencil`, `data-testid=project-rename`,
+      touch target h-11/w-11; usunięcie też powiększone do 44px) → dialog (spójny z confirm-delete:
+      fixed inset-0 + Card) z inputem prefilled, Zapisz/Anuluj, `rename-error` (role=alert), Enter=save.
+      Bonus: **„Nowy projekt"** otwiera dialog z polem nazwy (domyślnie „Mój pierwszy projekt",
+      `data-testid=create-dialog`/`create-name-input`/`create-save`; błąd dla pustej nazwy).
+      ⚠️ Zmieniony flow tworzenia — e2e `settings.spec.ts` zaadaptowane (create-save w dialogu).
+- [x] **Testy**: unit `db.test.ts` (renameProject: trim/persist, pusta nazwa, >100, =100 ok, ghost id),
+      `projectStore.test.ts` (3: persist, toast+no-change, aktywna nazwa), `ProjectsPage.test.tsx`
+      (+6: dialog tworz. z domyślną nazwą, custom name, create error, cancel rename, save persist,
+      invalid input). E2E `rename.spec.ts` (3: utwórz → rename karta → **persist po reload**, cancel,
+      pusta nazwa → błąd; **bez `deleteDatabase` w initScript** — context Playwright ma świeży IndexedDB,
+      a initScript wycinał db przy każdej nawigacji/reload).
+- [x] **Fixture `tests/e2e/fixtures/minimal.pmtiles`** (`fix(e2e)`): commitowana (`git add -f`,
+      *.pmtiles w .gitignore) — plik zaginiony przy merge; bez niego `snap-vertex.spec.ts` `readFileSync`
+      ENOENT blokował cały suite. Skopiowana z wt-mapperf (129 B, tippecanoe z=8).
+- Gates: **typecheck ✓ / lint ✓ / unit 437/437 ✓ / coverage 93.12/89.15/89.09% (progi 80/80/75 ✓) —
+  ProjectsPage 97.72%, projectStore 81.81% / build (PWA dist) ✓ / E2E 26/26 ✓** (3 flaky z poprzednich
+  branchy przeszły na retry; 3 nowe rename spec green od pierwszego runu).
+
+### ⚠️ Uwagi dla innych / dla nadzorcy
+
 ## Frontend (UX mobilny) — branch `feat/ux-mobile-panel`, worktree `/root/wt-ux-mobile` (2026-10-09)
 
 Commity (atomowe, w kolejności): `2af2d86` → `6ddbd07` → `bf1167b` → `6654bbc`.

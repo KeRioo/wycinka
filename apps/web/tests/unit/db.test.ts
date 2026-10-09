@@ -12,6 +12,7 @@ import {
   listProjectParcels,
   listTrees,
   removeParcelFromProjectDb,
+  renameProject,
   countProjectParcels,
   updateTree,
   updateRangesConfig,
@@ -344,5 +345,62 @@ describe('project parcels (schema v3)', () => {
     await addParcelToProjectDb(b.id, makeParcel('B'));
     await deleteProject(a.id);
     expect((await listProjectParcels(b.id)).map((row) => row.teryt)).toEqual(['B']);
+  });
+});
+
+describe('renameProject', () => {
+  beforeEach(async () => {
+    db.delete();
+    await db.open();
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+  });
+
+  it('should rename and persist with trimmed name', async () => {
+    const project = await createProject({ name: 'Stary las' });
+    const result = await renameProject(project.id, '  Nowy las  ');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.project.name).toBe('Nowy las');
+      expect(result.project.updatedAt.getTime()).toBeGreaterThanOrEqual(project.updatedAt.getTime());
+    }
+    const stored = await db.projects.get(project.id);
+    expect(stored?.name).toBe('Nowy las');
+  });
+
+  it('should return error (no throw) for empty name', async () => {
+    const project = await createProject({ name: 'Las' });
+    const result = await renameProject(project.id, '   ');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('od 1 do 100');
+    }
+    const stored = await db.projects.get(project.id);
+    expect(stored?.name).toBe('Las');
+  });
+
+  it('should reject name longer than 100 characters', async () => {
+    const project = await createProject({ name: 'Las' });
+    const result = await renameProject(project.id, 'x'.repeat(101));
+    expect(result.ok).toBe(false);
+  });
+
+  it('should accept 100-character name and reject 101', async () => {
+    const project = await createProject({ name: 'Las' });
+    expect((await renameProject(project.id, 'y'.repeat(100))).ok).toBe(true);
+    const p2 = await createProject({ name: 'Las 2' });
+    expect((await renameProject(p2.id, 'z'.repeat(101))).ok).toBe(false);
+  });
+
+  it('should return error for unknown project id', async () => {
+    const result = await renameProject('ghost-id', 'Nowa');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('nie istnieje');
+    }
   });
 });

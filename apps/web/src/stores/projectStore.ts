@@ -10,6 +10,7 @@ import {
   updatePdfPrefs as updatePdfPrefsInDb,
   updateRangesConfig as updateRangesConfigInDb,
   updateSpeciesConfig as updateSpeciesConfigInDb,
+  renameProject as renameProjectInDb,
   type Project,
 } from '@/db/schema';
 import type { Parcel } from '@/services/api.types';
@@ -35,6 +36,7 @@ interface ProjectState {
   createAndActivate: (name: string) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
   savePdfPrefs: (id: string, prefs: Project['pdfPrefs']) => Promise<void>;
+  renameProject: (id: string, name: string) => Promise<boolean>;
   saveSpeciesConfig: (id: string, species: Project['speciesConfig']) => Promise<void>;
   saveRangesConfig: (id: string, ranges: Project['rangesConfig']) => Promise<void>;
   refresh: () => Promise<void>;
@@ -145,6 +147,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   refresh: async () => {
     await get().loadProjects();
+  },
+
+  renameProject: async (id, name) => {
+    const result = await renameProjectInDb(id, name);
+    if (!result.ok) {
+      set({ toast: result.error });
+      return false;
+    }
+    set((state) => ({
+      projects: state.projects.map((p) => (p.id === result.project.id ? result.project : p)),
+    }));
+    return true;
   },
 
   savePdfPrefs: async (id, prefs) => {
