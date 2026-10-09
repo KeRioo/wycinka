@@ -25,6 +25,10 @@ const CONTENT_W = PAGE_W - MARGIN * 2;
 const MAP_RECT: Rect = { x: MARGIN, y: 30, w: CONTENT_W, h: 150 };
 const MAP_RECT_FULL: Rect = { x: MARGIN, y: 30, w: CONTENT_W, h: 210 };
 const TERYT_LIST_LIMIT = 4;
+export const TABLE_ROW_H = 7;
+const LAST_ROW_LIMIT_Y = PAGE_H - 22;
+const CONTINUATION_TITLE_Y = 32;
+const FIRST_TITLE_Y = 34;
 
 export interface PdfExportInput {
   readonly project: Project;
@@ -152,16 +156,18 @@ function drawPage(
   drawPageHeader(doc, input.project.name, teryt, pageIndex, pageCount);
 
   const withMap = sections.includes('map');
+  let rangesEnd: RangesEnd | undefined;
   if (withMap) {
     drawMapSection(doc, prefs, sections.includes('rangesTable'), input);
   }
   if (sections.includes('rangesTable')) {
     const compact = withMap;
-    drawRangesSection(doc, input, compact);
+    rangesEnd = drawRangesSection(doc, input, compact);
   }
 
   if (sections.includes('fullTable')) {
-    drawNumberedSection(doc, input.project.name, teryt, input.trees);
+    const startY = rangesEnd !== undefined ? rangesEnd.endY + 8 : FIRST_TITLE_Y;
+    drawNumberedSection(doc, input.project.name, teryt, input.trees, startY);
   }
 
   drawFooter(doc, generatedAt, summary);
@@ -186,7 +192,9 @@ function drawPageHeader(
   doc.text(teryt, PAGE_W - MARGIN - 2, MARGIN + 8, { align: 'right' });
   doc.setFontSize(8);
   doc.setFont('bold');
-  doc.text(`Strona ${String(pageIndex)}/${String(pageCount)}`, MARGIN + 2, MARGIN + 18);
+  const pageLabel =
+    pageCount > 0 ? `Strona ${String(pageIndex)}/${String(pageCount)}` : `Strona ${String(pageIndex)}`;
+  doc.text(pageLabel, MARGIN + 2, MARGIN + 18);
   doc.setFont('normal');
   doc.setTextColor('#6b7280');
   doc.setFontSize(9);
@@ -308,13 +316,22 @@ function drawCompass(
   doc.text('Północ prawdziwa', needle.labelX, needle.labelY + 4, { align: 'center' });
 }
 
-function drawRangesSection(doc: jsPDF, input: PdfExportInput, compact: boolean): void {
+interface RangesEnd {
+  endY: number;
+  endPage: number;
+}
+
+function drawRangesSection(
+  doc: jsPDF,
+  input: PdfExportInput,
+  compact: boolean,
+): RangesEnd {
   const table = buildRangesTable(
     input.trees,
     input.project.speciesConfig,
     input.project.rangesConfig,
   );
-  const titleY = compact ? MAP_RECT.y + MAP_RECT.h + 10 : 34;
+  const titleY = compact ? MAP_RECT.y + MAP_RECT.h + 10 : FIRST_TITLE_Y;
   doc.setFontSize(12);
   doc.setTextColor('#111827');
   doc.setFont('bold');
@@ -334,10 +351,25 @@ function drawRangesSection(doc: jsPDF, input: PdfExportInput, compact: boolean):
     String(row.total),
   ]);
 
-  drawRow(doc, header, titleY + 4, widths, true);
-  rows.forEach((row, index) => {
-    drawRow(doc, row, titleY + 4 + 7 * (index + 1), widths, false);
-  });
+  let y = titleY + 4;
+  drawRow(doc, header, y, widths, true);
+  y += TABLE_ROW_H;
+  for (const row of rows) {
+    if (y + TABLE_ROW_H > LAST_ROW_LIMIT_Y) {
+      doc.addPage();
+      doc.setFontSize(10);
+      doc.setFont('bold');
+      doc.setTextColor('#111827');
+      doc.text('Tabela zbiorcza — cd.', MARGIN, CONTINUATION_TITLE_Y);
+      doc.setFont('normal');
+      y = CONTINUATION_TITLE_Y + 4;
+      drawRow(doc, header, y, widths, true);
+      y += TABLE_ROW_H;
+    }
+    drawRow(doc, row, y, widths, false);
+    y += TABLE_ROW_H;
+  }
+  return { endY: y, endPage: doc.getNumberOfPages() };
 }
 
 function drawNumberedSection(
@@ -345,42 +377,61 @@ function drawNumberedSection(
   projectName: string,
   teryt: string,
   trees: readonly Tree[],
+  startY: number = FIRST_TITLE_Y,
 ): void {
-  let lastPageDrawn = doc.getNumberOfPages();
-  doc.setPage(lastPageDrawn);
-
-  doc.setFontSize(12);
-  doc.setTextColor('#111827');
-  doc.setFont('bold');
-  doc.text('Pełna lista drzew', MARGIN, 34);
-  doc.setFont('normal');
-
   const header = ['Nr', 'Gatunek', 'Obwód (cm)', 'Lokalizacja'];
   const widths = [10, 45, 25, CONTENT_W - 80];
   const rows = buildNumberedRows(trees);
-
-  let y = 38;
-  drawRow(doc, header, y, widths, true);
-  y += 7;
-  doc.setFontSize(9);
-  for (const row of rows) {
-    if (y > PAGE_H - 20) {
-      doc.addPage();
-      lastPageDrawn = doc.getNumberOfPages();
-      drawPageHeader(doc, `${projectName} — pełna lista drzew (cd.)`, teryt, lastPageDrawn, lastPageDrawn);      y = 34;
-      doc.setFontSize(9);
-      drawRow(doc, header, y, widths, true);
-      y += 7;
-    }
-    drawRow(
-      doc,
-      [String(row.nr), row.species, String(row.circumference), row.location],
-      y,
-      widths,
-      false,
-    );
-    y += 7;
+  const needsFirstPage = startY + 4 + TABLE_ROW_H > LAST_ROW_LIMIT_Y;
+  if (needsFirstPage) {
+    doc.addPage();
+    doc.setPage(doc.getNumberOfPages());
+    drawContinuationPageHeader(doc, projectName, teryt, doc.getNumberOfPages());
+    startY = CONTINUATION_TITLE_Y;
+  } else {
+    doc.setPage(doc.getNumberOfPages());
   }
+
+  let title = 'Pełna lista drzew';
+  let y = startY;
+  let headerDrawnForPage = false;
+  for (const row of rows) {
+    if (!headerDrawnForPage) {
+      doc.setFontSize(12);
+      doc.setTextColor('#111827');
+      doc.setFont('bold');
+      doc.text(title, MARGIN, y);
+      doc.setFont('normal');
+      drawRow(doc, header, y + 4, widths, true);
+      y += 4 + TABLE_ROW_H;
+      headerDrawnForPage = true;
+      doc.setFontSize(9);
+    }
+    if (y + TABLE_ROW_H > LAST_ROW_LIMIT_Y) {
+      doc.addPage();
+      const page = doc.getNumberOfPages();
+      drawContinuationPageHeader(doc, `${projectName} — pełna lista drzew`, teryt, page);
+      title = 'Pełna lista drzew — cd.';
+      y = CONTINUATION_TITLE_Y;
+      doc.setFont('bold');
+      doc.text(title, MARGIN, y);
+      doc.setFont('normal');
+      drawRow(doc, header, y + 4, widths, true);
+      y += 4 + TABLE_ROW_H;
+      doc.setFontSize(9);
+    }
+    drawRow(doc, [String(row.nr), row.species, String(row.circumference), row.location], y, widths, false);
+    y += TABLE_ROW_H;
+  }
+}
+
+function drawContinuationPageHeader(
+  doc: jsPDF,
+  projectName: string,
+  teryt: string,
+  page: number,
+): void {
+  drawPageHeader(doc, projectName, teryt, page, 0);
 }
 
 function drawRow(

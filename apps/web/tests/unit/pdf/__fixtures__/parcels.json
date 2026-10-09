@@ -1,0 +1,37 @@
+{
+  "parcels": [
+    {
+      "id": "small",
+      "center": [21.1, 52.2],
+      "spanLng": 0.004,
+      "spanLat": 0.003
+    },
+    {
+      "id": "medium",
+      "center": [21.5, 52.1],
+      "spanLng": 0.08,
+      "spanLat": 0.01
+    },
+    {
+      "id": "large",
+      "center": [20.9, 52.4],
+      "spanLng": 0.18,
+      "spanLat": 0.05
+    }
+  ],
+  "treeOffsets": [
+    { "species": "Dąb", "circumference": 92, "dx": -0.3, "dy": -0.25 },
+    { "species": "Buk", "circumference": 140, "dx": -0.1, "dy": -0.3 },
+    { "species": "Sosna", "circumference": 55, "dx": 0.15, "dy": -0.1 },
+    { "species": "Świerk", "circumference": 210, "dx": 0.35, "dy": -0.35 },
+    { "species": "Jodła", "circumference": 47, "dx": -0.4, "dy": 0.1 },
+    { "species": "Modrzew", "circumference": 118, "dx": -0.2, "dy": 0.35 },
+    { "species": "Brzoza", "circumference": 75, "dx": 0.05, "dy": 0.2 },
+    { "species": "Olsza", "circumference": 165, "dx": 0.25, "dy": 0.3 },
+    { "species": "Wierzba", "circumference": 260, "dx": 0.4, "dy": 0.05 },
+    { "species": "Lipa", "circumference": 88, "dx": -0.35, "dy": 0.3 },
+    { "species": "Klon", "circumference": 63, "dx": 0.1, "dy": 0.4 },
+    { "species": "Grab", "circumference": 133, "dx": 0.45, "dy": 0.25 }
+  ],
+  "outsideTree": { "species": "Sosna", "circumference": 200, "dx": 1.8, "dy": 1.6 }
+}

@@ -129,7 +129,7 @@ describe('toKm', () => {
     const lat0 = midLatOf(points);
     expect(lat0).toBeCloseTo(52.05, 6);
     const km = toKm(points, lat0);
-    const spanLngKm = km[1]![0]! - km[0]![0]!;
+    const spanLngKm = km[1][0] - km[0][0];
     expect(spanLngKm).toBeCloseTo(0.1 * 111.32 * Math.cos((52.05 * Math.PI) / 180), 5);
   });
 
