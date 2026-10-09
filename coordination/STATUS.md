@@ -410,3 +410,24 @@ TODO dla następnego etapu:
 - Skala liniowa (scale bar) i legenda gatunków na mapie PDF — nie w zakresie milestone
 - TERYT/pole działki w nagłówku tylko gdy projekt ma działkę z ULDK (obecnie '—')
 - Paginacja dużej tabeli zbiorczej przy bardzo wielu gatunkach (obecnie pojedyncza strona OK do ~25 gatunków)
+
+## Frontend (Milestones 6+7 + backlog issues) — branch feat/frontend-config-backup
+
+- [x] **Milestone 6 — Per-project configuration UI (PLAN §4.E)**
+  - Strona `/settings` (`src/pages/SettingsPage.tsx`): edytor gatunków (`SpeciesEditor` — nazwa+kolor, add/remove/reorder, walidacja duplikatów/pustych), edytor przedziałów (`RangesEditor` — custom ranges zastępujące defaulty §8.5, przycisk ∞ = otwarty koniec, walidacja od<to + rozłączności rosnącej), edytor PDF prefs (`PdfPrefsEditor` — layout single/combined/one-per-page, markerScale baseSize/perCm/maxSize, markerSizeBy circumference/fixed, autoRotate, tableOnSeparatePage, showNumberedTable). Backup/restore wpięty na tej samej stronie (`BackupPanel`).
+  - Persystencja: Dexie `updateSpeciesConfig`/`updateRangesConfig` (db/schema.ts) + `saveSpeciesConfig`/`saveRangesConfig`/`savePdfPrefs` (projectStore, Zustand).
+  - **Migracja Dexie v1→v2** (`db.verno=2`, `CURRENT_VERSION=2`): upgrade normalizuje legacy projekty przez `normalizeProjectConfig` (uzupełnia brakujące speciesConfig/rangesConfig/pdfPrefs domyślnymi). Uwaga: upgrade callback Dexie nie da się sensownie uruchomić w fake-indexeddb, więc normalizacja jest przetestowana wprost (7 testów) + `db.verno===CURRENT_VERSION` w teście.
+  - UI po polsku; integracja: route `/settings` (lazy) + link "Ustawienia" w Headerze.
+- [x] **Milestone 7 — Backup/restore JSON (PLAN §4.H)** — szczegóły wyżej w historii commitów (`b332411`+fixes): `lib/backup.ts` (zod, geometria jako string, Infinity↔null w ranges), overwrite/merge-by-id (merge nie nadpisuje rekordów istniejących), `BackupError` PARSE/VALIDATION/UNSUPPORTED_VERSION (plik z wyższym `schemaVersion` odrzucony), UI `BackupPanel`.
+- [x] **Backlog issues**: `api.types.Parcel` + `voivodeship_code/county_code/commune_code/datasource` (wg backend `ParcelDetail`; kody TERYT + Źródło w `ParcelPopup`); prawdziwe PNG ikony PWA 192/512 + maskable (skrypt bez zależności `apps/web/scripts/generate-icons.mjs`, swap w manifeście, SVG usunięte); lazy-load: `MapPage` i `SettingsPage` przez `React.lazy`+Suspense (kaseta mapy jako osobny chunk `MapPage-*.js`).
+- Testy: **330/330 unit pass** (63 nowe: edytory 28, SettingsPage 3, BackupPanel 6, backup lib 13, store/save 6, db+migracja 7); nazwy `should X when Y`.
+- Coverage: **92.28% lines / 87.5% functions / 87.96% branches** (threshold 80/80/75 ✅). settings/: SpeciesEditor 100%, RangesEditor ~100%, PdfPrefsEditor ~100%.
+- Gates: typecheck ✅ / eslint --max-warnings=0 ✅ / test ✅ / test:coverage ✅ / build ✅ (PWA dist, 24 precache).
+- Commits: `5305d8a` (backlog: Parcel fields + PNG + lazy-load), `b332411` `df273b9` `7858590` (M7 + fixes), `4e299d2` (M6). Branch gotowy do review — **nie mergować bez review nadzorcy** (per AGENTS.md §4.4).
+
+### TODO (resztki / follow-up)
+
+- PdfExportDialog nie oferuje edycji markerScale (jest w /settings); jeśli ma być w dialogu — dołożyć.
+- E2E Playwright dla flow ustawień i backup/restore (unit pokryty; E2E Zalecane przy okazji M10).
+- MSW mock dla /parcel zwraca kody TERYT — brak porównania z realnym backendem w testach (nie wymagane kontraktem).
+- Upgrade callback Dexie v2: real-device test tylko ręcznie (fake-indexeddb nie wykonuje upgrade functions) — test jednostkowy normalizatora zastępuje.
