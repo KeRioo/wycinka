@@ -70,3 +70,8 @@ infra/cloudflared/*.json
 
 # Docker
 .docker/
+
+# Screenshoty debug z sesji Playwright (root)
+/e2e-*.png
+/post-click.png
+/map-live-*.png
