@@ -102,8 +102,9 @@ describe('MapClickHandler', () => {
     act(() => {
       getMapClickHandler()({ lngLat: { lat: 52.231008, lng: 21.006008 } });
     });
-    const pos = draftPosition(useTreeStore.getState().pending ?? useTreeStore.getState().pending)!;
-    expect(pos.lat).toBeCloseTo(PARCEL_VERTEX.lat, 9);
-    expect(pos.lng).toBeCloseTo(PARCEL_VERTEX.lng, 9);
+    const pendingState = useTreeStore.getState().pending;
+    const pos = pendingState === null ? null : draftPosition(pendingState);
+    expect(pos?.lat).toBeCloseTo(PARCEL_VERTEX.lat, 9);
+    expect(pos?.lng).toBeCloseTo(PARCEL_VERTEX.lng, 9);
   });
 });
