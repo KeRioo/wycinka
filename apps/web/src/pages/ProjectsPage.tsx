@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FolderPlus, Map as MapIcon, Trash2 } from 'lucide-react';
+import { FolderPlus, Map as MapIcon, Trash2, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { useProjectStore } from '@/stores/projectStore';
 import type { Project } from '@/db/schema';
@@ -65,6 +65,9 @@ export default function ProjectsPage(): JSX.Element {
   const setActive = useProjectStore((s) => s.setActive);
   const createAndActivate = useProjectStore((s) => s.createAndActivate);
   const deleteProject = useProjectStore((s) => s.deleteProject);
+  const projectParcels = useProjectStore((s) => s.projectParcels);
+  const loadProjectParcels = useProjectStore((s) => s.loadProjectParcels);
+  const removeParcelFromProject = useProjectStore((s) => s.removeParcelFromProject);
   const navigate = useNavigate();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [creating, setCreating] = useState<boolean>(false);
@@ -72,6 +75,10 @@ export default function ProjectsPage(): JSX.Element {
   useEffect(() => {
     void loadProjects();
   }, [loadProjects]);
+
+  useEffect(() => {
+    void loadProjectParcels(activeProjectId);
+  }, [activeProjectId, loadProjectParcels]);
 
   const handleCreate = async (): Promise<void> => {
     setCreating(true);
@@ -128,6 +135,46 @@ export default function ProjectsPage(): JSX.Element {
           <Card>
             <CardContent className="text-center text-sm text-stone-600">
               Brak projektów. Utwórz pierwszy projekt, aby zacząć dodawać drzewa.
+            </CardContent>
+          </Card>
+        )}
+
+        {projects.length > 0 && activeProjectId !== null && (
+          <Card data-testid="active-project-panel">
+            <CardHeader>
+              <CardTitle className="text-base">
+                Aktywny projekt ·{' '}
+                {projects.find((p) => p.id === activeProjectId)?.name ?? '—'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p data-testid="project-parcel-count" className="text-sm text-stone-600">
+                Działki: {String(projectParcels.length)}
+              </p>
+              {projectParcels.length > 0 && (
+                <div data-testid="project-parcel-chips" className="mt-2 flex flex-wrap gap-2">
+                  {projectParcels.map((parcel) => (
+                    <span
+                      key={parcel.teryt}
+                      data-testid={`parcel-chip-${parcel.teryt}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-forest-200 bg-forest-50 px-3 py-1 text-xs font-medium text-forest-800"
+                    >
+                      {parcel.teryt}
+                      <button
+                        type="button"
+                        aria-label={`Usuń działkę ${parcel.teryt} z projektu`}
+                        data-testid={`parcel-chip-remove-${parcel.teryt}`}
+                        onClick={() => {
+                          void removeParcelFromProject(parcel.teryt);
+                        }}
+                        className="rounded-full p-0.5 text-forest-600 hover:bg-forest-100 hover:text-red-600"
+                      >
+                        <X aria-hidden="true" className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
