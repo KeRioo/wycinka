@@ -17,6 +17,8 @@ describe('ParcelPopup', () => {
     expect(screen.getByText(MOCK_PARCEL.county)).toBeInTheDocument();
     expect(screen.getByText(MOCK_PARCEL.commune)).toBeInTheDocument();
     expect(screen.getByText(MOCK_PARCEL.land_use!)).toBeInTheDocument();
+    expect(screen.getByText('14·12·01')).toBeInTheDocument();
+    expect(screen.getByText(MOCK_PARCEL.datasource)).toBeInTheDocument();
   });
 
   it('should format area correctly', () => {
