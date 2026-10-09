@@ -630,3 +630,66 @@ Branch: `feat/multi-parcel-project` (worktree /root/wt-multi-parcel)
   wygenerowany lokalnie z minimalnego syntetycznego archiwum PMTiles v3
   (header + pusty root dir + '{}' metadata).
 - Także hardening e2e w trees/arrowpad-hold/snap-vertex (retry czekania na FAB).
+
+---
+
+## 2026-10-09 — frontend: fix/pdf-layout — generacja PDF „rozjechany" (naprawa + podgląd)
+
+**Problem z żywego wdrożenia:** „generacja pdf — finalny plik całkowicie rozjechany".
+
+### Przyczyny (znalezione w kodzie)
+1. **Zła projekcja geodezyjna** (`geometry.ts` + `pdfReport.ts`): fit linowy po stopniach
+   lng/lat bez korekty cos(lat) — mapa rozciągnięta E–W ~1,55x na 52°N; także
+   chooseRotation minimalizował bbox w stopniach (błędny kąt).
+2. **Kompas odbity** (`compass.ts`): igła północy ekranowej po obrocie CCW o θ liczyła
+   (sinθ, −cosθ) zamiast (−sinθ, −cosθ) — 90° wskazywała wschod zamiast zachodu.
+   Compass.tsx (SVG) liczył label własną, spójną z błędem formułą.
+3. **Nakładanie sekcji w layout „combined"** (`pdfReport.ts`): pełna lista drzew
+   startowała na y=34 — na mapie (y 30–180) i na tabeli zbiorczej.
+4. **Overflow tabel**: wiersze 7 mm bez limitu; przy mapie (compact) ~12+ gatunków
+   rysowało wiersze poza stroną A4.
+5. **Markery poza ramką mapy**: drzewa poza bbox działki (GPS drift) i promień do
+   9 mm przy pad 6 mm — krążki/numeracja poza mapą.
+
+### Zmiany
+- `geometry.ts`: `toKm`/`midLatOf` (km z cos(lat)); fit/rotacja/projekcja po punktach w km
+- `pdfReport.ts`: clamp markerów+numeracji wewnątrz ramki; `drawRangesSection`
+  z paginacją (limit 275 mm, nagłówek kolumn „cd."), `drawNumberedSection` start po
+  tabeli zbiorczej + własna paginacja; nagłówki kontynuacji „Strona N" (bez fałszywego
+  licznika total)
+- `mapLayout.ts` (NOWY): `collectMapRings` + `computeMapLayout` — jedno źródło prawdy
+  dla PDF i podglądu (km-projekcja, auto-obrót, clamp; re-export collectMapRings z
+  pdfReport, ruch z pdfReport, stary test importujący — łamany)
+- `PdfMapPreview.tsx` (NOWY): SVG podgląd strony 1 (polilinie działki, markery z
+  numeracją, kompas); `PdfExportDialog` pokazuję podgląd przed „Generuj PDF",
+  reaguje na zmianę opcji
+- `compass.ts`/`Compass.tsx`: poprawna igła i label
+
+### Testy
+- `pdfLayout.test.ts` (12): fixtures `__fixtures__/parcels.json` (3 działki mała/średnia/
+  duża), 12 drzew dla 12 gatunków + drzewo poza działką; asercje: zachowanie
+  metrycznego aspect-ratio (poprawka działa, do screengrabu), zawartość w A4,
+  brak nakładania sekcji, markery w ramce mapy (3 rozmiary działek)
+- geometry.test (+3 km), compass.test (+1 test poprzeczny przy obrocie 45/90),
+  PdfMapPreview.test.tsx (4, RTL/DOM)
+- coverage: global 92.8% lines / 89.41% branch; src/lib/pdf 92.7%; build OK, lint OK,
+  typecheck OK; unit 444/444; e2e 26/28 + 1 flaky (usb mobile-panel: pass po retry)
+
+### Uwagi / TODO dla nadzorcy
+- **e2e pre-existing failure (nie z tej gałęzi)**: `multi-parcel.spec.ts — „list page"`
+  (i sporadycznie „remove button") pada na `page.goto('/map')` z błędem
+  „Cannot navigate to invalid URL" — reprodukuje się w 1:1 na commit bazowym
+  297bb5b (sprawdzone przez checkout). Podejrzewam flaky dev-server/integrację
+  kontenera; wymaga osobnej diagnozy przez agenta e2e/infra.
+- Fixture `tests/e2e/fixtures/minimal.pmtiles` odtworzony lokalnie (gitignored)
+  z minimalnego syntetycznego PMTiles v3 (header 127 B + pusty dir + {} metadata),
+  aby `snap-vertex.spec.ts` odpalał w tym worktree.
+- Podgląd w dialogu używa per-działka rings gdy aggregate niedostępny (bez
+  /parcel/aggregate w preview) — dla multi-działek fill/outlines identyczne
+  geometrycznie (bbox wspólny), ale nie pokazuje „N działek" z agregatu.
+
+### Gałąź: fix/pdf-layout (worktree /root/wt-pdf) —commity atomowe:
+- ab14f22 fix: mapa PDF w kilometrach z korektą szer. geo. + clamp markerów
+- 623f58e fix: układ stron PDF — paginacja tabel i koniec nakładania sekcji
+- 60631a9 fix: kompas — lustrzany kierunek igły przy obrocie mapy
+- c540c3d feat: podgląd SVG pierwszej strony PDF w dialogu eksportu
