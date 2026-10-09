@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl, { type Map as MaplibreMap, type MapLayerMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { usePMTiles } from './usePMTiles';
+import { usePendingMarkerDrag } from './usePendingDrag';
+import type { LatLng } from '@/lib/geo';
 
 export interface TreeFeatureProperties {
   id: string;
@@ -21,6 +23,11 @@ interface MapViewProps {
   onMapClick?: (point: { lat: number; lng: number }) => void;
   onMapReady?: (map: MaplibreMap) => void;
   onTreeClick?: (id: string, lngLat: { lng: number; lat: number }) => void;
+  pendingDrag?: {
+    vertices: readonly LatLng[];
+    onMove: (pos: LatLng) => void;
+    onEnd: (pos: LatLng) => void;
+  } | null;
   className?: string;
 }
 
@@ -61,6 +68,10 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
         data: emptyFeatureCollection(),
       },
       highlight: {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      },
+      'snap-indicator': {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       },
@@ -145,6 +156,18 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
           'circle-opacity': 0.75,
         },
       },
+      {
+        id: 'snap-indicator-ring',
+        type: 'circle',
+        source: 'snap-indicator',
+        paint: {
+          'circle-radius': 9,
+          'circle-color': '#0ea5e9',
+          'circle-opacity': 0.25,
+          'circle-stroke-color': '#0284c7',
+          'circle-stroke-width': 2,
+        },
+      },
     ],
   };
 }
@@ -175,12 +198,25 @@ export default function MapView({
   onMapClick,
   onMapReady,
   onTreeClick,
+  pendingDrag = null,
   className,
 }: MapViewProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const onTreeClickRef = useRef<typeof onTreeClick>(onTreeClick);
   const [styleLoaded, setStyleLoaded] = useState<boolean>(false);
+  const [map, setMap] = useState<MaplibreMap | null>(null);
+  const pendingDragRef = useRef(pendingDrag);
+  pendingDragRef.current = pendingDrag;
+
+  usePendingMarkerDrag({
+    map,
+    ready: styleLoaded,
+    enabled: pendingDrag !== null,
+    vertices: pendingDrag?.vertices ?? [],
+    onMove: (pos) => pendingDragRef.current?.onMove(pos),
+    onEnd: (pos) => pendingDragRef.current?.onEnd(pos),
+  });
 
   onTreeClickRef.current = onTreeClick;
 
@@ -227,7 +263,11 @@ export default function MapView({
       });
 
       setStyleLoaded(true);
+      setMap(map);
       onMapReady?.(map);
+      if (import.meta.env.MODE !== 'production') {
+        (window as unknown as Record<string, unknown>).wycinkaMap = map;
+      }
     });
 
     const handleClick = (e: MapLayerMouseEvent): void => {
@@ -245,7 +285,11 @@ export default function MapView({
       map.off('click', handleClick);
       map.remove();
       mapRef.current = null;
+      setMap(null);
       setStyleLoaded(false);
+      if (import.meta.env.MODE !== 'production') {
+        delete (window as unknown as Record<string, unknown>).wycinkaMap;
+      }
     };
   }, [pmtilesUrl, initialCenter, initialZoom, onMapClick, onMapReady]);
 

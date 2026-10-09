@@ -34,16 +34,24 @@ const { mapInstance, popupMock } = vi.hoisted(() => {
 
 vi.mock('maplibre-gl', () => {
   const MapMock = vi.fn().mockImplementation(() => mapInstance);
+  const MarkerMock = vi.fn().mockImplementation(() => ({
+    setLngLat: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+    getElement: vi.fn().mockReturnValue(document.createElement('div')),
+  }));
   return {
     default: {
       Map: MapMock,
       NavigationControl: vi.fn(),
       ScaleControl: vi.fn(),
+      Marker: MarkerMock,
       Popup: popupMock,
       addProtocol: vi.fn(),
       removeProtocol: vi.fn(),
     },
     Map: MapMock,
+    Marker: MarkerMock,
     Popup: popupMock,
   };
 });

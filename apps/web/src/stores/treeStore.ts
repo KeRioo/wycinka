@@ -7,7 +7,7 @@ import {
   updateTree as updateTreeInDb,
   type Tree,
 } from '@/db/schema';
-import { offsetMeters } from '@/lib/geo';
+import { offsetBetween, offsetMeters } from '@/lib/geo';
 
 export const treeDraftSchema = z.object({
   species: z.string().min(1, 'Wybierz gatunek'),
@@ -55,6 +55,7 @@ interface TreeState {
   setCircumference: (circumference: number) => void;
   setNotes: (notes: string) => void;
   nudge: (dxMeters: number, dyMeters: number) => void;
+  setPosition: (lat: number, lng: number) => void;
   useGps: (gpsPosition: { lat: number; lng: number; accuracy?: number }) => void;
   save: (projectId: string) => Promise<Tree>;
   selectTreeForEdit: (id: string) => void;
@@ -168,6 +169,15 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       dy: pending.manualOffset.dy + dyMeters,
     };
     set({ pending: { ...pending, manualOffset: newOffset } });
+  },
+
+  setPosition: (lat, lng) => {
+    const { pending } = get();
+    if (pending === null) {
+      return;
+    }
+    const manualOffset = offsetBetween(pending.lat, pending.lng, lat, lng);
+    set({ pending: { ...pending, manualOffset } });
   },
 
   useGps: (gpsPosition) => {

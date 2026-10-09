@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { addTree, createProject, db } from '@/db/schema';
-import { useTreeStore } from '@/stores/treeStore';
+import { draftPosition, useTreeStore } from '@/stores/treeStore';
 
 const GPS = { lat: 52.2297, lng: 21.0122, accuracy: 8 };
 
@@ -102,6 +102,49 @@ describe('useTreeStore', () => {
     const offset = useTreeStore.getState().pending?.manualOffset;
     expect(offset?.dx).toBeCloseTo(0.5, 6);
     expect(offset?.dy).toBeCloseTo(0.25, 6);
+  });
+
+  it('should setPosition encode offset from GPS base so draft position matches', () => {
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    useTreeStore.getState().setPosition(52.22975, 21.01225);
+    const pending = useTreeStore.getState().pending;
+    expect(pending?.lat).toBe(GPS.lat);
+    expect(pending?.lng).toBe(GPS.lng);
+    const pos = draftPosition(pending!);
+    expect(pos.lat).toBeCloseTo(52.22975, 9);
+    expect(pos.lng).toBeCloseTo(21.01225, 9);
+  });
+
+  it('should setPosition accumulate offset relative to original base on repeated calls', () => {
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    useTreeStore.getState().setPosition(52.2298, 21.0123);
+    useTreeStore.getState().setPosition(52.22975, 21.01225);
+    const offset = useTreeStore.getState().pending?.manualOffset;
+    expect(offset?.dx).toBeGreaterThan(0);
+    expect(offset?.dy).toBeGreaterThan(0);
+    const pos = draftPosition(useTreeStore.getState().pending!);
+    expect(pos.lat).toBeCloseTo(52.22975, 9);
+    expect(pos.lng).toBeCloseTo(21.01225, 9);
+  });
+
+  it('should setPosition do nothing when no pending draft', () => {
+    useTreeStore.getState().setPosition(52.5, 21.5);
+    expect(useTreeStore.getState().pending).toBeNull();
+  });
+
+  it('should keep offset on saved tree after setPosition', async () => {
+    const project = await createProject({ name: 'P' });
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    useTreeStore.getState().setSpecies('Dąb');
+    useTreeStore.getState().setCircumference(80);
+    useTreeStore.getState().setPosition(52.22975, 21.01225);
+    const tree = await useTreeStore.getState().save(project.id);
+    expect(tree.lat).toBeCloseTo(52.22975, 9);
+    expect(tree.lng).toBeCloseTo(21.01225, 9);
+    expect(tree.manualOffset?.dy).toBeCloseTo(
+      (52.22975 - GPS.lat) * 111320,
+      0,
+    );
   });
 
   it('should useGps reset offset and update position', () => {

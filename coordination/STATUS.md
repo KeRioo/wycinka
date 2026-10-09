@@ -485,3 +485,48 @@ Trigger `parcels_rtree_delete` (AFTER DELETE ON parcels) najpierw czyścił `par
 ### Backlog poruszone pozycje
 - #8 (hold-to-repeat E2E) ✅ — **done**
 - #9 (GPS averaging) ✅ — **done**
+
+## Frontend (backlog #10 — Snap-to-vertex pinezki) — branch feat/frontend-snap-vertex (2026-10-09)
+
+Worktree: `/root/wt-snap`, branch `feat/frontend-snap-vertex`, 5 commitów atomowych (ne plan zmniejszyć do main przez nadzorcę).
+
+- [x] `src/lib/snap.ts` — `extractVertexPoints` (wierzchołki Polygon/MultiPolygon działki),
+      `snapToVertex` (haversine do najbliższego wierzchołka, próg w metrach),
+      `snapThresholdMeters` (próg adaptacyjny: 12 px ekranu → metry, floor `SNAP_THRESHOLD_M`=1 m,
+      cap `SNAP_MAX_THRESHOLD_M`=20 m), `extractVertexPoints`, coverage pices 100%
+- [x] `src/lib/geo.ts` — `offsetBetween` (odwrotność offsetMeters: delta metrów między punktami)
+- [x] `src/stores/treeStore.ts` — akcja `setPosition(lat, lng)`: przelicza manualOffset względem
+      oryginalnej bazy GPS (draft.lat/lng NIE są ruszane), więc nudge/offsety liczone zawsze od GPS
+- [x] `src/components/map/usePendingDrag.ts` — pointer/touch drag pinezki na layerze
+      `trees-pending-circle` (maplibre events, bez setDraggable — pinezka rendering via GeoJSON,
+      nie DOM marker): wyłączenie dragPan podczas dragu, live-update pozycji (onMove → setPosition),
+      wskaźnik snapu: maplibregl.Marker z data-testid="snap-indicator" + GeoJSON ring
+      `snap-indicator` (kółko w wierzchołku)
+- [x] `src/components/map/MapView.tsx` — nowy prop `pendingDrag {vertices, onMove, onEnd}` +
+      source/layers `snap-indicator`; dev hookup `window.wycinkaMap` (MODE != production)
+- [x] `src/components/map/MapClickHandler.tsx` — w placing/editing klik na mapie przesuwa pinezkę
+      (ze snapem do wierzchołka) zamiast lookupu działki; wierzchołki z `extractVertexPoints`;
+      **naprawa regresji**: onMapClick ổnȋlnione przez refs (poprzednio zmiana identity było
+      re-creating mapę w MapView i urywało flyTo do centroidu)
+- [x] Persist potwierdzony: setPosition → save (Dexie позиции == wierzchołek)
+- [x] Testy unit (43 files / 372 pass): `snap.test.ts` (14), `MapView.test.tsx` drag wrafki (7 w suite),
+      `MapClickHandler.test.tsx` (2 — klik-snap w placing, brak snapu w idle), `treeStore.test.ts`
+      (+4 setPosition/save), `geo.test.ts` (+4 offsetBetween)
+- [x] Coverage łączny 92.9% (snap 100%, geo 100%, usePendingDrag 89.8%, MapClickHandler 92.9%),
+      `coverage/coverage-summary.txt` dołączony
+- [x] E2E `tests/e2e/snap-vertex.spec.ts` (2 testy): drag pinezki nad wierzchołkiem → wskaźnik
+      widoczny, drop → pozycja pinezki == wierzchołek, zapis → pozycja drzewa w Dexie == wierzchołek
+      (assert 1e-9 przez indexedDB); drugi test: brak snapu poza progiem
+- [x] Fixtures: `tests/e2e/fixtures/minimal.pmtiles` (326 B, ważny pmtiles v3 z pustym warstwą
+      vector `dzialki`) — bez tego maplibre nie emituje 'load' przy mockowanym pmtiles (blocker NA E2E)
+- [x] Gates: typecheck ✓, lint --max-warnings=0 ✓, vitest 372/372 ✓, coverage ≥80% ✓,
+      test:e2e 20/20 ✓ (cały suite, bez regresji tree-list/settings/trees), build ✓
+
+**Decyzje:** (1) manual pointer-events na GeoJSON layer zamiast `setDraggable` — pinezka to
+GeoJSON circle (nie marker DOM), przez co drag zustatki w jednym modelu renderowania;
+(2) próg snapu adaptacyjny pikselowy (12 px ekranu, min 1 m / max 20 m) — stały 1 m wyobrażony
+w terenie był nieosiągalny poniżej zoom ≈ 19 przy manuálnej dotyka; na wys.getInteger zoom wraca
+do 1 m zgodnie z logiem; (3) dodatkowo klik na mapie w placing/editing przenosi pinezkę ze
+snapem (drag ma być dotykający, natomiast klik to nóżna oczekiwana UX-moving).
+
+**Uwaga dla innych:** MapClickHandler w placing/editing nie robi lookup działki (celowo).
