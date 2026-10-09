@@ -2,12 +2,12 @@ import { act, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MapView from '@/components/map/MapView';
 
-const markerInstances: Array<{
+const markerInstances: {
   setLngLat: ReturnType<typeof vi.fn>;
   addTo: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
   getElement: ReturnType<typeof vi.fn>;
-}> = [];
+}[] = [];
 
 const mapInstance = {
   on: vi.fn(),

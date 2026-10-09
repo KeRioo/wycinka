@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl';
-import { snapThresholdMeters, snapToVertex, type LatLng } from '@/lib/snap';
+import { snapThresholdMeters, snapToVertex } from '@/lib/snap';
+import type { LatLng } from '@/lib/geo';
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
