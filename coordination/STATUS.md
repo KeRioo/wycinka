@@ -427,7 +427,7 @@ Trigger `parcels_rtree_delete` (AFTER DELETE ON parcels) najpierw czyścił `par
 ### Testy (4 nowe w `tests/test_migrations.py`)
 - delete działki → `parcels_rtree` i mapa puste (0,0) przy head
 - REPRO: instalacja legacy buggy triggera na 0001 → delete zostawia orphan (1,0) → `upgrade head` czyści orphan i dalszy INSERT/DELETE cycle czysty
-- `downgrade 0001` → trigger odtworzony, mapa czyszczona (rtree 0/1 zależnie od河水 — legacy zachowanie udokumentowane)
+- `downgrade 0001` → trigger odtworzony, mapa czyszczona (legacy zachowanie — rtree może zostać orphan, mapa zawsze czyszczona)
 - upgrade/downgrade cycle → delete cycle czysty
 
 ### Wyniki
