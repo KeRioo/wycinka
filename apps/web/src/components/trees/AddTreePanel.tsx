@@ -135,7 +135,7 @@ export default function AddTreePanel({
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0, bottom: 0.6 }}
         onDragEnd={handleDragEnd}
-        className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex h-[62vh] flex-col overflow-hidden rounded-t-2xl border-t border-stone-200 bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100%-1.5rem)] sm:rounded-2xl sm:border"
+        className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 max-h-[85vh] h-[62vh] flex flex-col overflow-hidden rounded-t-2xl border-t border-stone-200 bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100%-1.5rem)] sm:rounded-2xl sm:border"
         data-mobile-sheet={isMobile ? 'true' : 'false'}
         style={
           isMobile
