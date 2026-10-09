@@ -312,3 +312,61 @@ Branch: `feat/backend-scaffold`
   raporty generują się poprawnie, tylko cleanup katalogu tymczasowego się nie udaje (kosmetyka).
 - E2E `tree-list.spec.ts` nie mockuje `/api/v1/parcel` — kliknięcie mapy poza markerem daje toast
   "Failed to fetch" (oczekiwane bez backendu; nie wpływa na asercje).
+
+---
+
+## Backend — Milestone 8 (polish) — branch `feat/backend-migrations-sync-api`
+
+Dostarczone (3 commity, wszystkie w `apps/api/**`; `coordination/STATUS.md` tylko ten raport):
+
+- [x] `d9dc542` **feat: alembic migrations** — `alembic>=1.13` w dependencies,
+      `apps/api/alembic.ini` + `apps/api/migrations/` (env.py + script.py.mako).
+      Migracja `0001_initial_schema` tworzy na **pustym** SQLite pełny schemat
+      zgodny z `app/core/db.py`: `parcels` + indeksy, `parcels_rtree`,
+      `parcels_rtree_map`, triggery `parcels_rtree_insert`/`_delete`,
+      `sync_meta`. DDL importowane z `app.core.db` (jedno źródło prawdy);
+      wielostatementowe DDL przez `executescript` (op.execute nie ogarnia
+      wirtualnych tabel i triggerów BEGIN...END). Downgrade = drop wszystkiego.
+      URL bazy: `alembic.ini` → nadpisanie przez `WYCINKA_DB_URL` albo
+      `alembic -x db_url=...`. Zweryfikowane także z poziomu CLI (`alembic upgrade head`).
+- [x] `90bd5bc` **feat: /api/v1/sync/trigger + /api/v1/sync/status** —
+      `SyncService` (`app/services/sync_service.py`) odpala ETL jako zewnętrzną
+      komendę (`WYCINKA_SYNC_COMMAND`, domyślnie pusta = sync wyłączony)
+      przez `asyncio.create_subprocess_shell` w tle; stan w `sync_meta`
+      (`sync_status`, `sync_started_at`, `sync_finished_at`, `sync_error`,
+      `last_sync` przy sukcesie). Endpointy:
+      - `POST /api/v1/sync/trigger` → **202** `{status:"running",started_at,message}`;
+        błędy: **409** `SYNC_ALREADY_RUNNING`, **400** `SYNC_NOT_CONFIGURED`,
+        **503** `DB_UNAVAILABLE` (format błędu jak w pozostałych endpointach:
+        `{error, code, details}`).
+      - `GET /api/v1/sync/status` → **200** `{status: running|success|error|unknown,
+        running, started_at, finished_at, last_sync, error}`; **503** gdy baza
+        niedostępna.
+      - ⚠️ **Kontrakt `docs/api-contract.md` nie opisuje `/sync/*`** —
+        zaimplementowane sensownie w duchu kontraktu (error-shape, `/api/v1`
+        prefix, 503 DB_UNAVAILABLE), kontraktu nie edytowałem. Do decyzji
+        nadzorcy: dopisanie do kontraktu oraz docelowa komenda ETL w compose
+        (`WYCINKA_SYNC_COMMAND="python -m egib_sync full"`).
+      - ⚠️ Znaleziony (istniejący) problem w triggere `parcels_rtree_delete`
+        (identyczny w `db.py`, docs i migracji — spójnie z spec): drugi statement
+        SELECT-uje `rtree_id` z `parcels_rtree_map` **po** usunięciu wiersza mapy,
+        więc wpis w `parcels_rtree` zostaje orphan. Wiersz mapy jest czyszczony
+        poprawnie; R-tree zapytania łączą przez mapę, więc nie wpływają na
+        wyniki. Propozycja poprawki (zamiana kolejności / stash id) do decyzji
+        nadzorcy — zmiana wymagałaby edycji `app/core/db.py` + migracji.
+- [x] `1ef5618` **feat: prod file logging** — `configure_logging`: dev
+      (`WYCINKA_DEBUG=1`) → kolorowy stdout bez zmian; prod → JSON
+      do `wycinka.log` (append, per-line flush, katalog tworzony automatycznie,
+      `.gitignore` zaktualizowany). Ustawienie: `WYCINKA_LOG_FILE`.
+
+**Testy:** `72 passed` (było 55; +17: 6 migracje, 9 sync, 2 logging).
+**Coverage** (`pytest --cov=app --cov=migrations`): **88%** linii (wymóg ≥80%
+spełniony); nowe moduły: `app/api/sync.py` 94%, `app/services/sync_service.py`
+87%, `app/core/logging.py` 100%, `migrations/0001` 96%.
+**Quality gates:** `ruff check` clean, `ruff format` clean (py312, konwencje §4.2),
+`pytest -q` zielone. Brak TODO/console.log w kodzie produkcyjnym.
+
+TODO dla następnego etapu:
+- decyzja nadzorca: `/sync/*` do `docs/api-contract.md`
+- decyzja nadzorca: fix triggera `parcels_rtree_delete` (orphan w R-tree)
+- ETL: ustawić `WYCINKA_SYNC_COMMAND` w `infra/docker-compose.yml`
