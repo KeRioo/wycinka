@@ -94,7 +94,7 @@ export default function PdfExportDialog({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.15 }}
-            className="w-full max-w-md rounded-lg bg-white shadow-2xl"
+            className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-lg bg-white shadow-2xl"
           >
             <header className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
               <h2 className="text-lg font-semibold text-forest-900">Eksport PDF</h2>
@@ -109,7 +109,7 @@ export default function PdfExportDialog({
               </button>
             </header>
 
-            <div className="space-y-4 p-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
               <fieldset className="space-y-2">
                 <legend className="text-sm font-medium text-stone-700">Układ raportu</legend>
                 {LAYOUT_OPTIONS.map((option) => (

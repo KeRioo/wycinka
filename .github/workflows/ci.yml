@@ -80,7 +80,9 @@ jobs:
 
       - name: Run infra tests
         working-directory: infra
-        run: python3 tests/run.py
+        run: |
+          pip install --quiet pyyaml
+          python3 tests/run.py
 
   etl:
     name: ETL (sync-egib)
