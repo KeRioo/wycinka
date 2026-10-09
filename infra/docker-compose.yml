@@ -90,6 +90,11 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:2024.5.0
+    # Dwa tryby (wybór w runbook §secret):
+    # A) token (zalecane, config ingress w CF dashboard/API):
+    #    .env → CLOUDFLARED_TUNNEL_TOKEN=eyJ... ; stepni uruchamia ręcznie z tego tokena
+    # B) plik(config.yml + credentials <tunnel_id>.json):
+    #    cp cloudflared/config.yml.example cloudflared/config.yml + podmień <TUNNEL_ID>
     command: tunnel --config /etc/cloudflared/config.yml run
     restart: unless-stopped
     volumes:

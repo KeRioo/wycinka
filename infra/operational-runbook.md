@@ -238,3 +238,70 @@ Host-cron (doba, 4:00):
 
 3. `docker compose up -d` + `bash scripts/healthcheck.sh` + weryfikacja
    wersji (`/api/v1/version`) i renderowania PMTiles.
+
+---
+
+## Public deployment (Cloudflare Tunnel) — sprawdzone na srv01
+
+### Co jest potrzebne
+1. Domena w Cloudflare (zone `wycinka.app`, proxies włączony). API Token: Account
+   → Cloudflare Tunnel edit + DNS edit (Bearer Header, każdorazowo `Authorization: Bearer $T`).
+2. srv01 z docker + compose, klony: `git clone https://github.com/KeRioo/wycinka.git /opt/wycinka`.
+
+### Przepis (kolejność)
+```bash
+# 1. tunnel create przez CF API
+curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+  -d '{"name":"wycinka-srv01"}' \
+  "https://api.cloudflare.com/client/v4/accounts/$A/cfd_tunnel"
+# → zapisz id (np. 07f4b9fa-...) i get token:
+curl -s -H "Authorization: Bearer $T" \
+  "https://api.cloudflare.com/client/v4/accounts/$A/cfd_tunnel/$TI/token"
+# → TUNNEL_TOKEN (base64, 240 znaków) → mkdir 600 /root/.cloudflared-wycinka.token
+
+# 2. DNS route (CNAME → tunnel)
+curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+  -d '{"type":"CNAME","name":"wycinka.app","content":"'"$TI"'.cfargotunnel.com","proxied":true}' \
+  "https://api.cloudflare.com/client/v4/zones/$Z/dns_records"
+
+# 3. Ingress ustawiony na CF (remote-managed; brak config.yml) — albo ręcznie:
+curl -s -X PUT -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+  -d '{"config":{"ingress":[{"hostname":"wycinka.app","service":"http://caddy:80"},
+{"hostname":"*.wycinka.app","service":"http://caddy:80"},{"service":"http_status:404"}]}}' \
+  "https://api.cloudflare.com/client/v4/accounts/$A/cfd_tunnel/$TI/configurations"
+
+# 4. cloudflared run z tokenem (env, nie plikiem — token nie ląduje na dysku)
+TT=$(cat /root/.cloudflared-wycinka.token)
+docker run -d --name wycinka-cloudflared-1 \
+  --network wycinka_wycinka-net --restart unless-stopped \
+  -e TUNNEL_TOKEN=$TT \
+  cloudflare/cloudflared:2024.5.0 tunnel --no-autoupdate run
+
+# 5. infra/.env → DOMAIN ze spacją (Caddy sites):
+#    DOMAIN=srv01.local http://wycinka.app
+#    (wycinka.app jako scheme http — wcloudflared→caddy po plain HTTP; edge CF robi TLS,
+#    caddy nie wywoli redirect-a 308 http→https)
+```
+
+### Verify
+```bash
+curl -sk https://wycinka.app/                     # 401 (edge cert Let's Encrypt)
+curl -sk -u wycinka:<pass> https://wycinka.app/   # 200
+curl -sk -u wycinka:<pass> https://wycinka.app/api/v1/version   # 200 {"api":"1.0.0",...}
+```
+
+### Troubleshooting public deploy
+| Sytuacja | Przyczyna | Fix |
+|---|---|---|
+| https://wycinka.app → 502 | Caddy nieobsługuje `http://` dla hosta (tylko https site) | DOMAIN list: `srv01.local http://wycinka.app` |
+| `Site addresses cannot contain a comma` w Caddy logs | DOMAIN lista po comma bez space | Użyj Spaço w DOMAIN |
+| cloudflared registered, ale 502 z edge | ingress brak lub przesunięty na config.yml | PUT ingress remote-managed результаты |
+| https://localhost TLS internal error (test lokalny) | caddy nie ma certu dla SNI localhost | testuj z `--resolve srv01.local:443:127.0.0.1` |
+| 401 na wszystkich | AUTH_PASSWORD_HASH missing/invalid bcrypt arrow | auth config snippet; haslo generuj `caddy hash-password` |
+
+### Zmiana hasła wycinka-demo-2026
+```bash
+docker exec wycinka-caddy-1 caddy hash-password --plaintext '<nowe-haslo>'
+# → podmień AUTH_PASSWORD_HASH w infra/.env (escape $ na $$ w .env!) i restart crez
+docker compose --env-file .env up -d --force-recreate caddy
+```
