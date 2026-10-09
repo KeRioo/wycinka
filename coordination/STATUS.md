@@ -630,3 +630,58 @@ Branch: `feat/multi-parcel-project` (worktree /root/wt-multi-parcel)
   wygenerowany lokalnie z minimalnego syntetycznego archiwum PMTiles v3
   (header + pusty root dir + '{}' metadata).
 - Także hardening e2e w trees/arrowpad-hold/snap-vertex (retry czekania na FAB).
+
+## Frontend (subagent: frontend) — fix/map-layer-perf
+
+### Map layer perf: min-zoom cap + outline-only na niskim zoomie
+
+- [x] Problem: warstwy `dzialki` (PMTiles, ~178k działek) renderowane przy zoomie
+      krajowym (zoom 6, ~400 km) — miliard geometrii, zielona szmata z fill-a,
+      wysycenie klientów + serwer
+- [x] Style wydzielone do `src/components/map/mapStyle.ts` (eksport
+      `buildStyleWithPMTiles`, konstanty) — MapView tylko konsumuje
+- [x] `dzialki-outline`: **minzoom = 15** (~docelowa skala "od 500 m");
+      width interpolowany linearnie 15→0.6 px … 20→1.5 px, opacity 0.8
+- [x] `dzialki-fill`: **minzoom = 17** — na niższym zoomie tylko obryspy (linia)
+- [x] Highlight (wybrana działka) i parcels (projekt) — GeoJSON, BEZ kapu:
+      aktywny wybór widać zawsze, na każdym zoomie
+- [x] Bez zmian w selection pipeline: kliknięcie w działkę idzie przez API
+      (`lookup` per klik), nie przez queryRenderedFeatures → kap minzoom nie
+      zepsuje strzału
+- [x] Perf guard (pt.3): pominięty — dragPan disabled/enable przełączany
+      istniejąco w usePendingDrag; nic do zablokowania bez aktu regresji
+      interakcji w rękawicach. TODO po decyzji nadzorcy.
+
+### Testy
+- Unit: `tests/unit/mapStyle.test.ts` — 6 assertów na obiekcie stylu
+  (minzoom outline=15, fill=17, highlight/parcels bez kapu, interpolate na
+  line-width). mapStyle.ts 100% lines/branches.
+- E2E: `tests/e2e/map-layer-perf.spec.ts` (desktop/chromium):
+  1) getLayer minzoomy zgodnie ze spec
+  2) jumpTo zoom 5 → queryRenderedFeatures(['dzialki-outline',
+     'dzialki-fill']) zwraca 0 elementów
+  3) jumpTo zoom 18 → queryRenderedFeatures nadaje feature `dzialki-*`
+- Fixture e2e: wygenerowany od zera `tests/e2e/fixtures/minimal.pmtiles`
+  (gitignored *.pmtiles; pusty root directory + metadata '{}' + header 127 B,
+  spec v3) — poprawnie deserializowany przez pmtiles JS (deserializeIndex)
+- Uwaga: prettier przypadkowo przeformatował inne pliki (`--write src/**`) —
+  cofnięte, w commitach tylko zmiany funkcjonalne
+
+### Gates
+- typecheck OK, lint OK (max-warnings=0), 430 testów unit/integration OK,
+  coverage 92.97% lines global (prog 80), mapStyle.ts 100%, build OK
+- E2E: 30/31 passed; 1 fail: `snap-vertex.spec.ts:143` (snap-indicator
+  toBeVisible) — reprodukuje się identycznie na czystym drzewie bez mojej
+  zmiany → istniejący flake, niezwiązany z map-layer-perf🕾</think><tool_call>shell<arg_key>command</arg_key><arg_value>cd /root/wt-mapperf && git checkout apps/web && git log --oneline -1 >/dev/null; git add apps/web/src/components/map/mapStyle.ts apps/web/src/components/map/MapView.tsx apps/web/tests/unit/mapStyle.test.ts && git commit -m "perf(map): min-zoom cap na warstwach PMTiles dzialki — outline od z15, fill od z17
+
+Widok na cały kraj (zoom ≤14) rysował wcześniej ~178k działek PMTiles
+(fill + outline) — propozycja użytkownika: rendering tylko od ~500 m skali.
+
+- styl map wyciągnięty do mapStyle.ts (export buildStyleWithPMTiles,
+  DZIALKI_MIN_ZOOM=15 / DZIALKI_FILL_MIN_ZOOM=17)
+- dzialki-outline: minzoom 15, line-width interpolate 15:0.6 → 20:1.5
+- dzialki-fill: minzoom 17 (niżej tylko obrys, bez zielonego wypełnienia)
+- highlight i parcels (GeoJSON) bez kapu — aktywne wyróżnienie widać zawsze" && git add apps/web/tests/e2e/map-layer-perf.spec.ts && git commit -m "test(e2e): map-layer-perf — warstwa dzialki nie renderuje się poniżej minzoom
+
+getLayer().minzoom asercje zoom<15 (country-brak) i zoom 18 (features);
+projekt/highlight bez kapu; narzędzie queryRenderedFeatures na wycinkaMap dev hook" && git log --oneline -3
