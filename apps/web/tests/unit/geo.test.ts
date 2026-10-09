@@ -4,6 +4,7 @@ import {
   formatLatLng,
   getSpeciesColor,
   haversineMeters,
+  offsetBetween,
   markerSizeForCm,
   offsetMeters,
 } from '@/lib/geo';
@@ -63,6 +64,30 @@ describe('haversineMeters', () => {
     const d = haversineMeters(warsaw.lat, warsaw.lng, lodz.lat, lodz.lng);
     expect(d).toBeGreaterThan(115_000);
     expect(d).toBeLessThan(135_000);
+  });
+});
+
+describe('offsetBetween', () => {
+  it('should return zero offset for identical points', () => {
+    expect(offsetBetween(52.2297, 21.0122, 52.2297, 21.0122)).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it('should return positive dx when target is east of source', () => {
+    const { dx } = offsetBetween(52.2297, 21.0122, 52.2297, 21.0123);
+    expect(dx).toBeGreaterThan(0);
+    expect(dx).toBeCloseTo(0.0001 * 111320 * Math.cos(52.2297 * (Math.PI / 180)), 3);
+  });
+
+  it('should return positive dy when target is north of source', () => {
+    const { dy } = offsetBetween(52.2297, 21.0122, 52.2298, 21.0122);
+    expect(dy).toBeCloseTo(0.0001 * 111320, 1);
+  });
+
+  it('should roundtrip with offsetMeters', () => {
+    const { dx, dy } = offsetBetween(52.2297, 21.0122, 52.2312, 21.0145);
+    const target = offsetMeters(52.2297, 21.0122, dx, dy);
+    expect(target.lat).toBeCloseTo(52.2312, 9);
+    expect(target.lng).toBeCloseTo(21.0145, 9);
   });
 });
 

@@ -19,6 +19,17 @@ export function offsetMeters(lat: number, lng: number, dxMeters: number, dyMeter
   return { lat: lat + dLat, lng: lng + dLng };
 }
 
+export function offsetBetween(
+  fromLat: number,
+  fromLng: number,
+  toLat: number,
+  toLng: number,
+): { dx: number; dy: number } {
+  const dy = (toLat - fromLat) * METERS_PER_DEG_LAT;
+  const dx = (toLng - fromLng) * METERS_PER_DEG_LAT * Math.cos(fromLat * DEG_TO_RAD);
+  return { dx, dy };
+}
+
 export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const phi1 = lat1 * DEG_TO_RAD;
   const phi2 = lat2 * DEG_TO_RAD;
