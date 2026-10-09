@@ -15,6 +15,7 @@ from .core.config import Settings, get_settings
 from .core.db import Database
 from .core.logging import configure_logging, get_logger
 from .services.parcel_service import ParcelService
+from .services.sync_service import SyncService
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     db: Database = Database.open(settings.db_path_resolved)
     app.state.db = db
     app.state.parcel_service = ParcelService(db)
+    app.state.sync_service = SyncService(db, settings.sync_command)
 
     start = time.monotonic()
     db_available = await db.is_available()

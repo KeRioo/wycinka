@@ -88,6 +88,47 @@ All endpoints under `/api/v1/*` are documented in
 | `GET /api/v1/search?q=&limit=` | TERYT prefix search |
 | `GET /api/v1/pmtiles/dzialki` | PMTiles binary with HTTP Range support |
 | `OPTIONS /api/v1/pmtiles/dzialki` | CORS preflight for the PMTiles URL |
+| `POST /api/v1/sync/trigger` | Start the EGiB sync pipeline in the background |
+| `GET /api/v1/sync/status` | Status of the last (or current) sync run |
+
+`/api/v1/sync/*` is not part of `docs/api-contract.md` yet — see the
+§Database migrations section for how the sync command is configured.
+
+## Database migrations
+
+Schema lives in `app/core/db.py` (used at runtime by `Database.init_schema`)
+and is mirrored by Alembic migrations in `migrations/`. The initial
+migration (`0001_initial_schema`) applies `parcels`, the R-tree tables with
+their triggers, and `sync_meta` on an empty SQLite database.
+
+```bash
+# upgrade a database (path from alembic.ini → sqlalchemy.url),
+# or override per invocation:
+WYCINKA_DB_URL=sqlite:///data/parcels.sqlite alembic upgrade head
+
+# start from scratch:
+WYCINKA_DB_URL=sqlite:////tmp/empty.sqlite alembic upgrade head
+alembic downgrade base
+```
+
+## Sync pipeline (EGiB)
+
+The backend does not implement the import itself — it runs the ETL
+package (`scripts/sync-egib`) as an external command:
+
+```bash
+# configure (env or .env):
+WYCINKA_SYNC_COMMAND="python -m egib_sync full"
+```
+
+- `POST /api/v1/sync/trigger` spawns the command in the background and
+  returns `202 Accepted`. Alt-code `409 SYNC_ALREADY_RUNNING` if one is
+  already running, `400 SYNC_NOT_CONFIGURED` if no command is set.
+- `GET /api/v1/sync/status` reports `running` / `success` / `error` /
+  `unknown` with timestamps from `sync_meta` (`503` if the DB is
+  unavailable).
+- In production logs go to `wycinka.log` (JSON, one record per line);
+  in dev (`WYCINKA_DEBUG=1`) pretty logs stay on stdout.
 
 ### Example curl
 
