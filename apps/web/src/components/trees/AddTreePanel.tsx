@@ -21,10 +21,7 @@ interface AddTreePanelProps {
   onRefreshGps: () => void;
 }
 
-function subscribeToMediaQuery(
-  query: string,
-  onChange: (matches: boolean) => void,
-): () => void {
+function subscribeToMediaQuery(query: string, onChange: (matches: boolean) => void): () => void {
   const mediaQueryList = window.matchMedia(query);
   onChange(mediaQueryList.matches);
   mediaQueryList.addEventListener('change', (event) => {
@@ -38,8 +35,8 @@ function subscribeToMediaQuery(
 }
 
 function useMobileViewport(): boolean {
-  const [isMobile, setIsMobile] = useState<boolean>(() =>
-    window.matchMedia(MOBILE_MEDIA_QUERY).matches,
+  const [isMobile, setIsMobile] = useState<boolean>(
+    () => window.matchMedia(MOBILE_MEDIA_QUERY).matches,
   );
   useEffect(() => subscribeToMediaQuery(MOBILE_MEDIA_QUERY, setIsMobile), []);
   return isMobile;
@@ -78,9 +75,12 @@ export default function AddTreePanel({
     if (activeProjectId === null) {
       return;
     }
-    void useTreeStore.getState().save(activeProjectId).catch(() => {
-      // błąd obsłużony w store; panel zostaje otwarty
-    });
+    void useTreeStore
+      .getState()
+      .save(activeProjectId)
+      .catch(() => {
+        // błąd obsłużony w store; panel zostaje otwarty
+      });
   };
 
   const handleUseGps = (): void => {
@@ -215,7 +215,12 @@ export default function AddTreePanel({
           <TreeForm />
 
           <div className="flex items-center justify-end gap-2 border-t border-stone-200 pt-3">
-            <Button type="button" variant="secondary" data-testid="panel-cancel" onClick={handleCancel}>
+            <Button
+              type="button"
+              variant="secondary"
+              data-testid="panel-cancel"
+              onClick={handleCancel}
+            >
               Anuluj
             </Button>
             <Button

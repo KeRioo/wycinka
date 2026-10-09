@@ -54,7 +54,12 @@ export default function MapPage(): JSX.Element {
   const setListPanelOpen = useTreeStore((s) => s.setListPanelOpen);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
 
-  const { position, error: gpsError, loading: gpsLoading, refresh } = useGeolocation({
+  const {
+    position,
+    error: gpsError,
+    loading: gpsLoading,
+    refresh,
+  } = useGeolocation({
     averagingSamples: mode === 'idle' ? 1 : 5,
   });
 
@@ -120,13 +125,10 @@ export default function MapPage(): JSX.Element {
       });
   }, []);
 
-  const handleEditTree = useCallback(
-    (id: string) => {
-      useTreeStore.getState().selectTreeForEdit(id);
-      useTreeStore.getState().setListPanelOpen(false);
-    },
-    [],
-  );
+  const handleEditTree = useCallback((id: string) => {
+    useTreeStore.getState().selectTreeForEdit(id);
+    useTreeStore.getState().setListPanelOpen(false);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -145,8 +147,7 @@ export default function MapPage(): JSX.Element {
       return;
     }
 
-    const tree =
-      selectedTreeId !== null ? trees.find((t) => t.id === selectedTreeId) : undefined;
+    const tree = selectedTreeId !== null ? trees.find((t) => t.id === selectedTreeId) : undefined;
 
     if (tree === undefined) {
       treePopupRootRef.current?.render(null);
@@ -218,7 +219,10 @@ export default function MapPage(): JSX.Element {
     clearFocus();
   }, [pendingFocus, mapReady, clearFocus]);
 
-  const treeLayer = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null>(() => {
+  const treeLayer = useMemo<GeoJSON.FeatureCollection<
+    GeoJSON.Point,
+    TreeFeatureProperties
+  > | null>(() => {
     if (mode === 'placing' || mode === 'editing') {
       if (pending === null) {
         return null;
@@ -242,7 +246,9 @@ export default function MapPage(): JSX.Element {
     if (position !== null) {
       startPlacing({ gpsPosition: position });
     } else if (selectedParcel !== null) {
-      startPlacing({ gpsPosition: { lat: selectedParcel.centroid[1], lng: selectedParcel.centroid[0] } });
+      startPlacing({
+        gpsPosition: { lat: selectedParcel.centroid[1], lng: selectedParcel.centroid[0] },
+      });
     } else {
       startPlacing();
     }
@@ -284,7 +290,13 @@ export default function MapPage(): JSX.Element {
             <CardContent className="space-y-2 p-3 text-sm text-red-800">
               <p className="font-medium">Błąd</p>
               <p>{error}</p>
-              <Button size="sm" variant="secondary" onClick={() => { setError(null); }}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setError(null);
+                }}
+              >
                 Zamknij
               </Button>
             </CardContent>
@@ -338,9 +350,7 @@ export default function MapPage(): JSX.Element {
         </div>
       )}
 
-      {hasProject && mode === 'idle' && (
-        <Fab onClick={handleStartPlacing} />
-      )}
+      {hasProject && mode === 'idle' && <Fab onClick={handleStartPlacing} />}
 
       {hasProject && (
         <button
@@ -417,7 +427,13 @@ interface ParcelCardProps {
   onRemove?: (teryt: string) => void;
 }
 
-function ParcelCard({ parcel, onClose, action = { kind: 'none' }, onAdd, onRemove }: ParcelCardProps): JSX.Element {
+function ParcelCard({
+  parcel,
+  onClose,
+  action = { kind: 'none' },
+  onAdd,
+  onRemove,
+}: ParcelCardProps): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   return (
     <Card className="pointer-events-auto" data-testid="parcel-card">

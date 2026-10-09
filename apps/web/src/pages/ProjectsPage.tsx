@@ -42,12 +42,7 @@ function ProjectRow({ project, onSelect, onDelete }: ProjectRowProps): JSX.Eleme
         <div className="space-y-2 text-sm text-stone-600">
           {project.teryt !== undefined && <p>TERYT: {project.teryt}</p>}
           <p>Utworzony: {formatDate(project.createdAt)}</p>
-          <Button
-            size="sm"
-            variant="primary"
-            data-testid="project-open"
-            onClick={onSelect}
-          >
+          <Button size="sm" variant="primary" data-testid="project-open" onClick={onSelect}>
             <MapIcon aria-hidden="true" className="mr-1 h-4 w-4" />
             Otwórz
           </Button>
@@ -120,8 +115,7 @@ export default function ProjectsPage(): JSX.Element {
             }}
             disabled={creating}
           >
-            <FolderPlus aria-hidden="true" className="mr-2 h-5 w-5" />
-            + Nowy projekt
+            <FolderPlus aria-hidden="true" className="mr-2 h-5 w-5" />+ Nowy projekt
           </Button>
         </header>
 
@@ -143,8 +137,7 @@ export default function ProjectsPage(): JSX.Element {
           <Card data-testid="active-project-panel">
             <CardHeader>
               <CardTitle className="text-base">
-                Aktywny projekt ·{' '}
-                {projects.find((p) => p.id === activeProjectId)?.name ?? '—'}
+                Aktywny projekt · {projects.find((p) => p.id === activeProjectId)?.name ?? '—'}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -181,7 +174,10 @@ export default function ProjectsPage(): JSX.Element {
 
         <div className="grid gap-3 sm:grid-cols-2">
           {projects.map((project) => (
-            <div key={project.id} className={project.id === activeProjectId ? 'ring-2 ring-forest-500 rounded-lg' : ''}>
+            <div
+              key={project.id}
+              className={project.id === activeProjectId ? 'ring-2 ring-forest-500 rounded-lg' : ''}
+            >
               <ProjectRow
                 project={project}
                 onSelect={() => {

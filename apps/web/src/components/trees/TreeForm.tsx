@@ -11,7 +11,10 @@ interface TreeFormProps {
   defaultSpecies?: string;
 }
 
-function resolveSpecies(pendingSpecies: string | undefined, defaultSpecies: string | undefined): string {
+function resolveSpecies(
+  pendingSpecies: string | undefined,
+  defaultSpecies: string | undefined,
+): string {
   if (pendingSpecies !== undefined && pendingSpecies !== '') {
     return pendingSpecies;
   }
@@ -108,10 +111,7 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
       })}
     >
       <div>
-        <label
-          htmlFor="tree-species"
-          className="mb-1 block text-sm font-medium text-forest-900"
-        >
+        <label htmlFor="tree-species" className="mb-1 block text-sm font-medium text-forest-900">
           Gatunek
         </label>
         <select
@@ -163,10 +163,7 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
       </div>
 
       <div>
-        <label
-          htmlFor="tree-notes"
-          className="mb-1 block text-sm font-medium text-forest-900"
-        >
+        <label htmlFor="tree-notes" className="mb-1 block text-sm font-medium text-forest-900">
           Notatki
         </label>
         <textarea

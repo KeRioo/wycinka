@@ -61,7 +61,12 @@ test.describe('Multi-parcel project', () => {
       void route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ api: '1.0.0', data: '2026-09-29', egib_source: 'geoportal.gov.pl', etag: 'test-etag' }),
+        body: JSON.stringify({
+          api: '1.0.0',
+          data: '2026-09-29',
+          egib_source: 'geoportal.gov.pl',
+          etag: 'test-etag',
+        }),
       });
     });
     await context.route('**/api/v1/pmtiles/**', (route) => {
@@ -76,8 +81,22 @@ test.describe('Multi-parcel project', () => {
           body: JSON.stringify({
             type: 'MultiPolygon',
             coordinates: [
-              [[[21.006, 52.231], [21.007, 52.231], [21.007, 52.232], [21.006, 52.231]]],
-              [[[21.018, 52.229], [21.019, 52.229], [21.019, 52.230], [21.018, 52.229]]],
+              [
+                [
+                  [21.006, 52.231],
+                  [21.007, 52.231],
+                  [21.007, 52.232],
+                  [21.006, 52.231],
+                ],
+              ],
+              [
+                [
+                  [21.018, 52.229],
+                  [21.019, 52.229],
+                  [21.019, 52.23],
+                  [21.018, 52.229],
+                ],
+              ],
             ],
             bbox: [21.006, 52.229, 21.019, 52.232],
             area_m2: 2000,
@@ -91,12 +110,16 @@ test.describe('Multi-parcel project', () => {
       void route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(isNorth ? parcelBody('141201_1.0001.6501', 1000) : parcelBody('141201_1.0001.6502', 2000)),
+        body: JSON.stringify(
+          isNorth ? parcelBody('141201_1.0001.6501', 1000) : parcelBody('141201_1.0001.6502', 2000),
+        ),
       });
     });
   });
 
-  test('Should add two parcels to the project and show them on the /list page', async ({ page }) => {
+  test('Should add two parcels to the project and show them on the /list page', async ({
+    page,
+  }) => {
     await ensureProject(page);
 
     const container = page.locator('[data-testid="map-container"]').first();
@@ -109,9 +132,14 @@ test.describe('Multi-parcel project', () => {
     const addNorth = page.getByTestId('add-parcel-to-project');
     await expect(addNorth).toBeVisible({ timeout: 10_000 });
     await addNorth.click();
-    await expect(page.getByRole('button', { name: /Usuń z projektu/i })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('button', { name: /Usuń z projektu/i })).toBeVisible({
+      timeout: 5_000,
+    });
 
-    await page.getByRole('button', { name: /Zamknij/i }).first().click();
+    await page
+      .getByRole('button', { name: /Zamknij/i })
+      .first()
+      .click();
     await expect(page.getByTestId('add-parcel-to-project')).toHaveCount(0);
 
     await page.mouse.click(box.x + (box.width / 4) * 3, box.y + box.height * 0.75);
@@ -136,8 +164,10 @@ test.describe('Multi-parcel project', () => {
     await expect(page.getByTestId('add-tree-panel')).not.toBeVisible({ timeout: 5_000 });
 
     await expect(page.getByTestId('pdf-export-toggle')).toBeEnabled({ timeout: 10_000 });
-    const aggregateRequest = page
-      .waitForRequest((request) => request.url().includes('/parcel/aggregate'), { timeout: 15_000 });
+    const aggregateRequest = page.waitForRequest(
+      (request) => request.url().includes('/parcel/aggregate'),
+      { timeout: 15_000 },
+    );
     await page.getByTestId('pdf-export-toggle').click();
     await expect(page.getByTestId('pdf-export-generate')).toBeEnabled();
     await page.getByTestId('pdf-export-generate').click();
@@ -154,9 +184,9 @@ test.describe('Multi-parcel project', () => {
     }
     await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.25);
     await page.getByTestId('add-parcel-to-project').click({ timeout: 10_000 });
-    await expect(
-      page.getByRole('button', { name: /Usuń z projektu/i }),
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('button', { name: /Usuń z projektu/i })).toBeVisible({
+      timeout: 5_000,
+    });
     await expect(page.getByTestId('add-parcel-to-project')).toHaveCount(0);
   });
 });

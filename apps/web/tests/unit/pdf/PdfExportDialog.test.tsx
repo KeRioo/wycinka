@@ -70,9 +70,7 @@ describe('PdfExportDialog', () => {
   });
 
   it('should render nothing when closed', () => {
-    render(
-      <PdfExportDialog open={false} project={PROJECT} trees={[tree()]} onClose={noop} />,
-    );
+    render(<PdfExportDialog open={false} project={PROJECT} trees={[tree()]} onClose={noop} />);
     expect(screen.queryByTestId('pdf-export-dialog')).not.toBeInTheDocument();
   });
 
@@ -131,8 +129,22 @@ describe('PdfExportDialog — parcels/aggregate', () => {
   const AGG: ParcelAggregateResponse = {
     type: 'MultiPolygon',
     coordinates: [
-      [[[21.0, 52.2], [21.02, 52.2], [21.02, 52.22], [21.0, 52.2]]],
-      [[[21.05, 52.25], [21.06, 52.25], [21.06, 52.26], [21.05, 52.25]]],
+      [
+        [
+          [21.0, 52.2],
+          [21.02, 52.2],
+          [21.02, 52.22],
+          [21.0, 52.2],
+        ],
+      ],
+      [
+        [
+          [21.05, 52.25],
+          [21.06, 52.25],
+          [21.06, 52.26],
+          [21.05, 52.25],
+        ],
+      ],
     ],
     bbox: [21.0, 52.2, 21.06, 52.26],
     area_m2: 9999,
@@ -151,7 +163,17 @@ describe('PdfExportDialog — parcels/aggregate', () => {
       region_name: 'Obręb 0001',
       area_m2: 1000,
       land_use: 'Ls',
-      geom: { type: 'Polygon', coordinates: [[[21, 52.2], [21.01, 52.2], [21.01, 52.21], [21, 52.2]]] },
+      geom: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [21, 52.2],
+            [21.01, 52.2],
+            [21.01, 52.21],
+            [21, 52.2],
+          ],
+        ],
+      },
       bbox: [21, 52.2, 21.01, 52.21],
       centroid: [21.005, 52.205],
       fetched_at: '2026-09-29T03:00:00Z',
@@ -170,11 +192,16 @@ describe('PdfExportDialog — parcels/aggregate', () => {
   it('should fetch aggregate geometry when multiple parcels', async () => {
     const user = userEvent.setup();
     const parcels = [makeParcel('A'), makeParcel('B')];
-    render(<PdfExportDialog open project={PROJECT} trees={[tree()]} parcels={parcels} onClose={noop} />);
+    render(
+      <PdfExportDialog open project={PROJECT} trees={[tree()]} parcels={parcels} onClose={noop} />,
+    );
     await user.click(screen.getByTestId('pdf-export-generate'));
     await vi.waitFor(() => {
       expect(aggregateMock).toHaveBeenCalledWith(['A', 'B']);
-      const input = generatePdfReportMock.mock.calls.at(-1)?.[0] as { aggregate?: unknown; parcels?: unknown };
+      const input = generatePdfReportMock.mock.calls.at(-1)?.[0] as {
+        aggregate?: unknown;
+        parcels?: unknown;
+      };
       expect(input?.aggregate).toEqual(AGG);
       expect(input?.parcels).toEqual(parcels);
     });
@@ -183,7 +210,9 @@ describe('PdfExportDialog — parcels/aggregate', () => {
   it('should skip aggregate fetch for single parcel and pass parcels', async () => {
     const user = userEvent.setup();
     const parcels = [makeParcel('A')];
-    render(<PdfExportDialog open project={PROJECT} trees={[tree()]} parcels={parcels} onClose={noop} />);
+    render(
+      <PdfExportDialog open project={PROJECT} trees={[tree()]} parcels={parcels} onClose={noop} />,
+    );
     await user.click(screen.getByTestId('pdf-export-generate'));
     await vi.waitFor(() => {
       expect(aggregateMock).not.toHaveBeenCalled();
@@ -196,10 +225,15 @@ describe('PdfExportDialog — parcels/aggregate', () => {
     const user = userEvent.setup();
     const parcels = [makeParcel('A'), makeParcel('B')];
     aggregateMock.mockRejectedValue(new Error('network'));
-    render(<PdfExportDialog open project={PROJECT} trees={[tree()]} parcels={parcels} onClose={noop} />);
+    render(
+      <PdfExportDialog open project={PROJECT} trees={[tree()]} parcels={parcels} onClose={noop} />,
+    );
     await user.click(screen.getByTestId('pdf-export-generate'));
     await vi.waitFor(() => {
-      const input = generatePdfReportMock.mock.calls.at(-1)?.[0] as { parcels?: unknown; aggregate?: unknown };
+      const input = generatePdfReportMock.mock.calls.at(-1)?.[0] as {
+        parcels?: unknown;
+        aggregate?: unknown;
+      };
       expect(input?.aggregate).toBeUndefined();
       expect(input?.parcels).toEqual(parcels);
     });
@@ -210,7 +244,10 @@ describe('PdfExportDialog — parcels/aggregate', () => {
     render(<PdfExportDialog open project={PROJECT} trees={[tree()]} onClose={noop} />);
     await user.click(screen.getByTestId('pdf-export-generate'));
     await vi.waitFor(() => {
-      const input = generatePdfReportMock.mock.calls.at(-1)?.[0] as { parcels?: unknown; aggregate?: unknown };
+      const input = generatePdfReportMock.mock.calls.at(-1)?.[0] as {
+        parcels?: unknown;
+        aggregate?: unknown;
+      };
       expect(input?.parcels).toEqual([]);
       expect(input?.aggregate).toBeUndefined();
     });

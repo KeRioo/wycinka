@@ -23,9 +23,7 @@ describe('api client', () => {
     });
 
     it('should throw ApiError when backend fails', async () => {
-      server.use(
-        http.get('*/api/v1/version', () => HttpResponse.error()),
-      );
+      server.use(http.get('*/api/v1/version', () => HttpResponse.error()));
       await expect(api.getVersion()).rejects.toThrowError(ApiError);
     });
   });
@@ -120,4 +118,3 @@ describe('api client', () => {
     });
   });
 });
-

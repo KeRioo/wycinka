@@ -44,9 +44,7 @@ export function buildRangesTable(
   }
 
   const orderedKeys = [
-    ...speciesConfig
-      .map((species) => species.name)
-      .filter((name) => bucketed.has(name)),
+    ...speciesConfig.map((species) => species.name).filter((name) => bucketed.has(name)),
     ...[...bucketed.keys()].filter((name) => !speciesConfig.some((s) => s.name === name)),
   ];
 

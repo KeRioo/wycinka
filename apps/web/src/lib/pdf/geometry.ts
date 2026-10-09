@@ -21,7 +21,9 @@ export function polygonPoints(geometry: Geometry): LngLat[] {
   if (geometry.type === 'Polygon') {
     return geometry.coordinates[0]?.map((p) => [...p] as [number, number]) ?? [];
   }
-  return geometry.coordinates.flatMap((ring) => ring[0]?.map((p) => [...p] as [number, number]) ?? []);
+  return geometry.coordinates.flatMap(
+    (ring) => ring[0]?.map((p) => [...p] as [number, number]) ?? [],
+  );
 }
 
 export function bboxOf(points: readonly LngLat[]): BBox {
@@ -77,17 +79,12 @@ export function midLatOf(points: readonly LngLat[]): number {
 
 export function toKm(points: readonly LngLat[], lat0: number): LngLat[] {
   const factor = Math.cos((lat0 * Math.PI) / 180);
-  return points.map(([lng, lat]) => [
-    lng * KM_PER_DEG_LNG * factor,
-    lat * KM_PER_DEG_LAT,
-  ] as LngLat);
+  return points.map(
+    ([lng, lat]) => [lng * KM_PER_DEG_LNG * factor, lat * KM_PER_DEG_LAT] as LngLat,
+  );
 }
 
-export function chooseRotation(
-  points: readonly LngLat[],
-  step = 5,
-  maxDeg = 85,
-): number {
+export function chooseRotation(points: readonly LngLat[], step = 5, maxDeg = 85): number {
   if (points.length < 2) {
     return 0;
   }
@@ -109,11 +106,7 @@ export function chooseRotation(
 
 export type Projector = (lng: number, lat: number) => [number, number];
 
-export function makeProjector(
-  points: readonly LngLat[],
-  rect: Rect,
-  paddingMm = 6,
-): Projector {
+export function makeProjector(points: readonly LngLat[], rect: Rect, paddingMm = 6): Projector {
   const bbox = bboxOf(points);
   const spanX = Math.max(bbox.maxX - bbox.minX, 1e-6);
   const spanY = Math.max(bbox.maxY - bbox.minY, 1e-6);
@@ -125,8 +118,5 @@ export function makeProjector(
   const offsetY = rect.y + paddingMm + (usableH - spanY * scale) / 2;
 
   return (lng: number, lat: number) =>
-    [
-      offsetX + (lng - bbox.minX) * scale,
-      offsetY + (bbox.maxY - lat) * scale,
-    ] as [number, number];
+    [offsetX + (lng - bbox.minX) * scale, offsetY + (bbox.maxY - lat) * scale] as [number, number];
 }

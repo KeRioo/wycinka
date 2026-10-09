@@ -23,7 +23,7 @@ export default function SettingsPage(): JSX.Element {
   }, [loadProjects]);
 
   const activeProject: Project | null =
-    activeProjectId !== null ? projects.find((p) => p.id === activeProjectId) ?? null : null;
+    activeProjectId !== null ? (projects.find((p) => p.id === activeProjectId) ?? null) : null;
   const loading = status === 'loading' && projects.length === 0;
 
   if (loading) {

@@ -25,8 +25,22 @@ export default function Compass({ size, rotationDeg }: CompassProps): JSX.Elemen
       data-rotation={String(rotationDeg)}
     >
       <circle cx={half} cy={half} r={radius} fill="none" stroke="#111827" strokeWidth={1.5} />
-      <line x1={needle.northX} y1={needle.northY} x2={half} y2={half} stroke="#b91c1c" strokeWidth={2} />
-      <line x1={half} y1={half} x2={needle.southX} y2={needle.southY} stroke="#111827" strokeWidth={2} />
+      <line
+        x1={needle.northX}
+        y1={needle.northY}
+        x2={half}
+        y2={half}
+        stroke="#b91c1c"
+        strokeWidth={2}
+      />
+      <line
+        x1={half}
+        y1={half}
+        x2={needle.southX}
+        y2={needle.southY}
+        stroke="#111827"
+        strokeWidth={2}
+      />
       <text
         x={labelX}
         y={labelY + 3}

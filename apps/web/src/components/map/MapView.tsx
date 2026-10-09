@@ -147,13 +147,7 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
         source: 'trees',
         filter: ['!=', ['get', 'pending'], true],
         paint: {
-          'circle-radius': [
-            'interpolate',
-            ['linear'],
-            ['get', 'circumferencePx'],
-            6, 6,
-            18, 18,
-          ],
+          'circle-radius': ['interpolate', ['linear'], ['get', 'circumferencePx'], 6, 6, 18, 18],
           'circle-color': ['get', 'speciesColor'],
           'circle-stroke-color': '#15803d',
           'circle-stroke-width': 1.5,
@@ -166,13 +160,7 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
         source: 'trees',
         filter: ['==', ['get', 'pending'], true],
         paint: {
-          'circle-radius': [
-            'interpolate',
-            ['linear'],
-            ['get', 'circumferencePx'],
-            6, 8,
-            18, 16,
-          ],
+          'circle-radius': ['interpolate', ['linear'], ['get', 'circumferencePx'], 6, 8, 18, 16],
           'circle-color': '#dc2626',
           'circle-stroke-color': '#fef2f2',
           'circle-stroke-width': 2,
@@ -195,7 +183,9 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
   };
 }
 
-function highlightSourceData(geom: GeoJSON.Polygon | GeoJSON.MultiPolygon): GeoJSON.FeatureCollection {
+function highlightSourceData(
+  geom: GeoJSON.Polygon | GeoJSON.MultiPolygon,
+): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
     features: [

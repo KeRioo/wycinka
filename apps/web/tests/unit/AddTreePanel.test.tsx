@@ -46,12 +46,7 @@ describe('AddTreePanel', () => {
 
   it('should not render when mode is idle', () => {
     render(
-      <AddTreePanel
-        gpsPosition={null}
-        gpsLoading={false}
-        gpsError={null}
-        onRefreshGps={vi.fn()}
-      />,
+      <AddTreePanel gpsPosition={null} gpsLoading={false} gpsError={null} onRefreshGps={vi.fn()} />,
     );
     expect(screen.queryByTestId('add-tree-panel')).not.toBeInTheDocument();
   });

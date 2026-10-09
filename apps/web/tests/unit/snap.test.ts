@@ -14,8 +14,8 @@ const SQUARE: Geometry = {
     [
       [21.0122, 52.2297],
       [21.0125, 52.2297],
-      [21.0125, 52.2300],
-      [21.0122, 52.2300],
+      [21.0125, 52.23],
+      [21.0122, 52.23],
       [21.0122, 52.2297],
     ],
   ],
@@ -26,18 +26,18 @@ const MULTI_SQUARE: Geometry = {
   coordinates: [
     [
       [
-        [21.0100, 52.2295],
+        [21.01, 52.2295],
         [21.0105, 52.2295],
         [21.0105, 52.2298],
-        [21.0100, 52.2295],
+        [21.01, 52.2295],
       ],
     ],
     [
       [
-        [21.0130, 52.2300],
-        [21.0135, 52.2300],
+        [21.013, 52.23],
+        [21.0135, 52.23],
         [21.0135, 52.2303],
-        [21.0130, 52.2300],
+        [21.013, 52.23],
       ],
     ],
   ],
@@ -64,7 +64,11 @@ describe('snapToVertex', () => {
   });
 
   it('should return null when no vertex is within the threshold', () => {
-    const result = snapToVertex({ lat: 52.231, lng: 21.016 }, extractVertexPoints(SQUARE), SNAP_THRESHOLD_M);
+    const result = snapToVertex(
+      { lat: 52.231, lng: 21.016 },
+      extractVertexPoints(SQUARE),
+      SNAP_THRESHOLD_M,
+    );
     expect(result).toBeNull();
   });
 

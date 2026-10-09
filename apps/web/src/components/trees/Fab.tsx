@@ -8,11 +8,7 @@ interface FabProps {
   className?: string;
 }
 
-export default function Fab({
-  onClick,
-  label = 'Dodaj drzewo',
-  className,
-}: FabProps): JSX.Element {
+export default function Fab({ onClick, label = 'Dodaj drzewo', className }: FabProps): JSX.Element {
   return (
     <motion.button
       type="button"
@@ -27,7 +23,10 @@ export default function Fab({
         className,
       )}
     >
-      <span className="absolute inset-0 animate-ping rounded-full bg-forest-700 opacity-20" aria-hidden="true" />
+      <span
+        className="absolute inset-0 animate-ping rounded-full bg-forest-700 opacity-20"
+        aria-hidden="true"
+      />
       <TreePine aria-hidden="true" className="relative h-6 w-6" />
       <span className="sr-only">{label}</span>
     </motion.button>

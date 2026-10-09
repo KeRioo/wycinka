@@ -141,10 +141,7 @@ describe('useTreeStore', () => {
     const tree = await useTreeStore.getState().save(project.id);
     expect(tree.lat).toBeCloseTo(52.22975, 9);
     expect(tree.lng).toBeCloseTo(21.01225, 9);
-    expect(tree.manualOffset?.dy).toBeCloseTo(
-      (52.22975 - GPS.lat) * 111320,
-      0,
-    );
+    expect(tree.manualOffset?.dy).toBeCloseTo((52.22975 - GPS.lat) * 111320, 0);
   });
 
   it('should useGps reset offset and update position', () => {

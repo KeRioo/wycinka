@@ -1,9 +1,5 @@
-import type {
-  Project,
-  Tree,
-  Geometry,
-  RangeConfig,
-} from '@/db/schema';
+import type { Project, Tree, RangeConfig } from '@/db/schema';
+import type { Geometry } from '@/services/api.types';
 import { DEFAULT_PDF_PREFS, DEFAULT_SPECIES, type PdfPrefs } from '@/db/schema';
 import type { Parcel } from '@/services/api.types';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -13,14 +9,12 @@ const { FakeDoc } = vi.hoisted(() => {
   class FakeDocShim {
     calls: { op: string; args: unknown[] }[] = [];
     pages = 1;
-    private drawColor = '#000000';
 
     private log(op: string, args: unknown[]): void {
       this.calls.push({ op, args });
     }
 
-    addPage(): void {
-      this.pages += 1;
+    addPage(): void {      this.pages += 1;
       this.log('addPage', []);
     }
 
@@ -68,7 +62,6 @@ const { FakeDoc } = vi.hoisted(() => {
     }
 
     setDrawColor(color: string): void {
-      this.drawColor = color;
       this.log('setDrawColor', [color]);
     }
 
@@ -306,11 +299,7 @@ beforeEach(() => {
   FakeDoc.prototype.pages = 1;
 });
 
-function expectKmAspectRatio(
-  doc: unknown,
-  parcel: ParcelFixture,
-  margin = 0.15,
-): void {
+function expectKmAspectRatio(doc: unknown, parcel: ParcelFixture, margin = 0.15): void {
   const extents = ringLineExtents(doc);
   expect(extents).not.toBeNull();
   const kmPerDegLng = 111.32 * Math.cos((parcel.center[1] * Math.PI) / 180);
@@ -351,7 +340,8 @@ function compactOverflowTrees(parcel: Parcel): Tree[] {
     .map((species, index) => {
       const angle = (index / 14) * 2 * Math.PI;
       const rx = parcel.bbox[0] + (index + 1) * 0.3 * ((parcel.bbox[2] - parcel.bbox[0]) / 15);
-      const ry = parcel.bbox[1] + Math.abs(Math.cos(angle)) * ((parcel.bbox[3] - parcel.bbox[1]) / 2);
+      const ry =
+        parcel.bbox[1] + Math.abs(Math.cos(angle)) * ((parcel.bbox[3] - parcel.bbox[1]) / 2);
       return {
         id: `tree-overflow-${String(index)}`,
         projectId: 'p-1',
@@ -398,11 +388,7 @@ describe('pdf page containment', () => {
 
   it('should not overlap the numbered list with the ranges table in the combined layout', () => {
     const parcel = parcelFor(1);
-    const trees = [
-      treesForParcel(1)[0],
-      treesForParcel(1)[1],
-      treesForParcel(1)[2],
-    ];
+    const trees = [treesForParcel(1)[0], treesForParcel(1)[1], treesForParcel(1)[2]];
     const doc = generatePdfReport({
       project: { ...PROJECT, polygon: parcel.geom },
       trees,

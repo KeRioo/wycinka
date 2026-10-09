@@ -52,10 +52,7 @@ describe('buildRangesTable', () => {
   });
 
   it('should keep species in speciesConfig order', () => {
-    const trees = [
-      tree({ id: 'a', species: 'Sosna' }),
-      tree({ id: 'b', species: 'Dąb' }),
-    ];
+    const trees = [tree({ id: 'a', species: 'Sosna' }), tree({ id: 'b', species: 'Dąb' })];
     const table = buildRangesTable(trees, DEFAULT_SPECIES, DEFAULT_RANGES);
     expect(table.rows.map((row) => row.species)).toEqual(['Dąb', 'Sosna']);
   });

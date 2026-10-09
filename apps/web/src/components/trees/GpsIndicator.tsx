@@ -87,10 +87,7 @@ export default function GpsIndicator({
       className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm"
     >
       <div className="min-w-0 flex-1">
-        <p
-          data-testid="gps-coords"
-          className="truncate font-mono text-xs text-forest-900"
-        >
+        <p data-testid="gps-coords" className="truncate font-mono text-xs text-forest-900">
           {formatLatLng(position.lat, position.lng)}
         </p>
         <p className="text-xs text-stone-500">

@@ -1,6 +1,11 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { MOCK_PARCEL_FOUND, MOCK_PARCEL_NOT_FOUND, MOCK_SEARCH_RESPONSE, MOCK_VERSION } from './api-responses';
+import {
+  MOCK_PARCEL_FOUND,
+  MOCK_PARCEL_NOT_FOUND,
+  MOCK_SEARCH_RESPONSE,
+  MOCK_VERSION,
+} from './api-responses';
 
 export const handlers = [
   http.get('*/health', () =>

@@ -56,7 +56,10 @@ export default function RangesEditor({ initial, onSave }: RangesEditorProps): JS
         setError('Każdy przedział musi mieć etykietę.');
         return;
       }
-      if (!Number.isFinite(range.from) || (range.to !== Number.POSITIVE_INFINITY && !Number.isFinite(range.to))) {
+      if (
+        !Number.isFinite(range.from) ||
+        (range.to !== Number.POSITIVE_INFINITY && !Number.isFinite(range.to))
+      ) {
         setError('Podaj poprawne wartości liczbowe przedziałów.');
         return;
       }
@@ -115,7 +118,9 @@ export default function RangesEditor({ initial, onSave }: RangesEditorProps): JS
                 aria-pressed={item.to === Number.POSITIVE_INFINITY}
                 data-testid={`ranges-open-${String(index)}`}
                 onClick={() => {
-                  updateAt(index, { to: item.to === Number.POSITIVE_INFINITY ? 100 : Number.POSITIVE_INFINITY });
+                  updateAt(index, {
+                    to: item.to === Number.POSITIVE_INFINITY ? 100 : Number.POSITIVE_INFINITY,
+                  });
                 }}
                 className={
                   item.to === Number.POSITIVE_INFINITY

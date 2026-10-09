@@ -123,17 +123,16 @@ describe('MapView', () => {
   });
 });
 
-function getLayerEventHandler(layer: string, event: string): ((payload: unknown) => void) | undefined {
-  const found = mapInstance.on.mock.calls.find(
-    (args) => args[0] === event && args[1] === layer,
-  );
+function getLayerEventHandler(
+  layer: string,
+  event: string,
+): ((payload: unknown) => void) | undefined {
+  const found = mapInstance.on.mock.calls.find((args) => args[0] === event && args[1] === layer);
   return found?.[2] as (payload: unknown) => void;
 }
 
 function getMapEventHandler(event: string): ((payload: unknown) => void) | undefined {
-  const found = mapInstance.on.mock.calls.find(
-    (args) => args[0] === event && args.length === 2,
-  );
+  const found = mapInstance.on.mock.calls.find((args) => args[0] === event && args.length === 2);
   return found?.[1] as (payload: unknown) => void;
 }
 

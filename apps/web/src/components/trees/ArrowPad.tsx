@@ -117,9 +117,19 @@ export default function ArrowPad({
   return (
     <div className="space-y-2">
       <div className="flex flex-col items-center gap-2">
-        <ArrowButton direction="up" label="Przesuń o 0.25 m na północ" onPress={startRepeat} onRelease={stopRepeat} />
+        <ArrowButton
+          direction="up"
+          label="Przesuń o 0.25 m na północ"
+          onPress={startRepeat}
+          onRelease={stopRepeat}
+        />
         <div className="flex items-center gap-2">
-          <ArrowButton direction="left" label="Przesuń o 0.25 m na zachód" onPress={startRepeat} onRelease={stopRepeat} />
+          <ArrowButton
+            direction="left"
+            label="Przesuń o 0.25 m na zachód"
+            onPress={startRepeat}
+            onRelease={stopRepeat}
+          />
           {onUseGps !== undefined ? (
             <button
               type="button"
@@ -136,14 +146,21 @@ export default function ArrowPad({
           ) : (
             <div className="h-14 w-14" aria-hidden="true" />
           )}
-          <ArrowButton direction="right" label="Przesuń o 0.25 m na wschód" onPress={startRepeat} onRelease={stopRepeat} />
+          <ArrowButton
+            direction="right"
+            label="Przesuń o 0.25 m na wschód"
+            onPress={startRepeat}
+            onRelease={stopRepeat}
+          />
         </div>
-        <ArrowButton direction="down" label="Przesuń o 0.25 m na południe" onPress={startRepeat} onRelease={stopRepeat} />
+        <ArrowButton
+          direction="down"
+          label="Przesuń o 0.25 m na południe"
+          onPress={startRepeat}
+          onRelease={stopRepeat}
+        />
       </div>
-      <p
-        data-testid="nudge-status"
-        className="text-center font-mono text-xs text-stone-600"
-      >
+      <p data-testid="nudge-status" className="text-center font-mono text-xs text-stone-600">
         Przesunięcie: +{dx.toFixed(2)} m / {dy.toFixed(2)} m
       </p>
     </div>

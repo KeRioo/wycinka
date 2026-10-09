@@ -288,9 +288,7 @@ describe('MapPage — tree list and marker popup', () => {
     );
     callLatestLoadHandler();
     await user.click(screen.getByTestId('tree-list-toggle'));
-    const rowSelect = screen
-      .getByTestId('tree-list-item')
-      .querySelector('button');
+    const rowSelect = screen.getByTestId('tree-list-item').querySelector('button');
     if (rowSelect === null) {
       throw new Error('row select button missing');
     }
@@ -343,9 +341,7 @@ describe('MapPage — tree list and marker popup', () => {
       throw new Error('no popup created');
     }
     const container = getPopupContainer(lastPopup);
-    const editButton = container.querySelector(
-      '[data-testid="tree-popup-edit"]',
-    )!;
+    const editButton = container.querySelector('[data-testid="tree-popup-edit"]')!;
     if (editButton === null) {
       throw new Error('edit button missing in popup');
     }
@@ -373,9 +369,7 @@ describe('MapPage — tree list and marker popup', () => {
       throw new Error('no popup created');
     }
     const container = getPopupContainer(lastPopup);
-    const deleteButton = container.querySelector(
-      '[data-testid="tree-popup-delete"]',
-    )!;
+    const deleteButton = container.querySelector('[data-testid="tree-popup-delete"]')!;
     if (deleteButton === null) {
       throw new Error('delete button missing in popup');
     }

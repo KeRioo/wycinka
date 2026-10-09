@@ -19,13 +19,7 @@ function makeTree(overrides: Partial<Tree> = {}): Tree {
 
 describe('TreePopup', () => {
   it('should render species, circumference, date and coordinates', () => {
-    render(
-      <TreePopup
-        tree={makeTree()}
-        onEdit={vi.fn()}
-        onDelete={vi.fn()}
-      />,
-    );
+    render(<TreePopup tree={makeTree()} onEdit={vi.fn()} onDelete={vi.fn()} />);
     const popup = screen.getByTestId('tree-popup');
     expect(popup).toHaveTextContent('Dąb');
     expect(popup).toHaveTextContent('Obwód: 85 cm');
@@ -42,9 +36,7 @@ describe('TreePopup', () => {
         onDelete={vi.fn()}
       />,
     );
-    expect(screen.getByTestId('tree-popup')).toHaveTextContent(
-      'Notatka: Druga gałąź po lewej',
-    );
+    expect(screen.getByTestId('tree-popup')).toHaveTextContent('Notatka: Druga gałąź po lewej');
   });
 
   it('should not render notes when absent', () => {

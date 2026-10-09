@@ -10,7 +10,9 @@ const INITIAL: RangeConfig[] = [
   { from: 75, to: Number.POSITIVE_INFINITY, label: 'ostatni' },
 ];
 
-function setup(onSave: (ranges: RangeConfig[]) => Promise<void> = vi.fn((): Promise<void> => Promise.resolve())) {
+function setup(
+  onSave: (ranges: RangeConfig[]) => Promise<void> = vi.fn((): Promise<void> => Promise.resolve()),
+) {
   render(<RangesEditor initial={INITIAL} onSave={onSave} />);
   return onSave;
 }

@@ -7,11 +7,17 @@ import { useTreeStore } from '@/stores/treeStore';
 import type { Parcel } from '@/services/api.types';
 import { useProjectStore } from '@/stores/projectStore';
 import type { LatLng } from '@/lib/geo';
-import { extractVertexPoints, snapThresholdMeters, snapToVertex, SNAP_THRESHOLD_M } from '@/lib/snap';
+import {
+  extractVertexPoints,
+  snapThresholdMeters,
+  snapToVertex,
+  SNAP_THRESHOLD_M,
+} from '@/lib/snap';
 
 const DEFAULT_API_URL = 'http://localhost:8000/api/v1';
 const DEFAULT_PMTILES_URL =
-  import.meta.env.VITE_PMTILES_URL || `${import.meta.env.VITE_API_URL || DEFAULT_API_URL}/pmtiles/dzialki`;
+  import.meta.env.VITE_PMTILES_URL ||
+  `${import.meta.env.VITE_API_URL || DEFAULT_API_URL}/pmtiles/dzialki`;
 
 function toGeoJSONPolygon(parcel: Parcel): GeoJSON.Polygon {
   if (parcel.geom.type !== 'Polygon') {
@@ -23,9 +29,7 @@ function toGeoJSONPolygon(parcel: Parcel): GeoJSON.Polygon {
   return parcelGeomToGeoJSON(parcel.geom) as GeoJSON.Polygon;
 }
 
-function parcelGeomToGeoJSON(
-  geom: Parcel['geom'],
-): GeoJSON.Polygon | GeoJSON.MultiPolygon {
+function parcelGeomToGeoJSON(geom: Parcel['geom']): GeoJSON.Polygon | GeoJSON.MultiPolygon {
   if (geom.type === 'Polygon') {
     return {
       type: 'Polygon',

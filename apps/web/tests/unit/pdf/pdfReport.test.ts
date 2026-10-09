@@ -85,10 +85,17 @@ vi.mock('jspdf', () => ({
   jsPDF: FakeDoc,
 }));
 
-import { generatePdfReport, pdfFileName, buildParcelHeader, collectMapRings } from '@/lib/pdf/pdfReport';
+import {
+  generatePdfReport,
+  pdfFileName,
+  buildParcelHeader,
+  collectMapRings,
+} from '@/lib/pdf/pdfReport';
 import type { Parcel, ParcelAggregateResponse } from '@/services/api.types';
 
-interface Doc { calls: Call[] }
+interface Doc {
+  calls: Call[];
+}
 
 function asDoc(doc: unknown): Doc {
   return doc as Doc;
@@ -258,7 +265,8 @@ describe('generatePdfReport', () => {
 });
 
 describe('pdfFileName', () => {
-  it('should slugify the project name and add the date', () => {    const name = pdfFileName(PROJECT, new Date('2026-03-01T10:00:00Z'));
+  it('should slugify the project name and add the date', () => {
+    const name = pdfFileName(PROJECT, new Date('2026-03-01T10:00:00Z'));
     expect(name).toBe('wycinka-las-wolski-2026-03-01.pdf');
   });
 
@@ -383,11 +391,17 @@ describe('generatePdfReport — multi-parcel', () => {
 
   it('should fill polygons and draw navy outline when multi', () => {
     const parcels = [makeParcel('A', 21, 52.2), makeParcel('B', 21.05, 52.25)];
-    const doc = generatePdfReport({ project: { ...PROJECT, polygon: undefined }, trees: [], parcels });
+    const doc = generatePdfReport({
+      project: { ...PROJECT, polygon: undefined },
+      trees: [],
+      parcels,
+    });
     expect(callsOf(asDoc(doc), 'lines').length).toBeGreaterThan(0);
     const setFillColorCalls = callsOf(asDoc(doc), 'setFillColor');
     expect(setFillColorCalls.some((call) => call.args.includes('#166534'))).toBe(true);
-    expect(callsOf(asDoc(doc), 'setDrawColor').some((call) => call.args.includes('#1e3a8a'))).toBe(true);
+    expect(callsOf(asDoc(doc), 'setDrawColor').some((call) => call.args.includes('#1e3a8a'))).toBe(
+      true,
+    );
   });
 
   it('should label parcel count in header and map for multi', () => {
