@@ -224,6 +224,25 @@ describe('MapPage', () => {
     );
     expect(mapInstance.flyTo).not.toHaveBeenCalled();
   });
+
+  it('should fly the map to the pending pin and clear the focus target when requested', () => {
+    mapInstance.flyTo.mockClear();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    callLatestLoadHandler();
+    act(() => {
+      useMapStore.getState().requestFocus({ lat: 52.15, lng: 21.23 });
+    });
+    expect(mapInstance.flyTo).toHaveBeenCalledWith({
+      center: [21.23, 52.15],
+      zoom: 13,
+      duration: 500,
+    });
+    expect(useMapStore.getState().focusTarget).toBeNull();
+  });
 });
 
 describe('MapPage — tree list and marker popup', () => {

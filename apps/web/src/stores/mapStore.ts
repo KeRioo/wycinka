@@ -7,11 +7,14 @@ interface MapState {
   isLoading: boolean;
   error: string | null;
   highlightLayerId: string | null;
+  focusTarget: { lat: number; lng: number } | null;
   setSelectedParcel: (parcel: Parcel | null) => void;
   setPendingPoint: (point: { lat: number; lng: number } | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setHighlightLayer: (id: string | null) => void;
+  requestFocus: (point: { lat: number; lng: number }) => void;
+  clearFocusTarget: () => void;
   reset: () => void;
 }
 
@@ -21,6 +24,7 @@ export const useMapStore = create<MapState>((set) => ({
   isLoading: false,
   error: null,
   highlightLayerId: null,
+  focusTarget: null,
   setSelectedParcel: (parcel) => {
     set({ selectedParcel: parcel });
   },
@@ -36,6 +40,12 @@ export const useMapStore = create<MapState>((set) => ({
   setHighlightLayer: (id) => {
     set({ highlightLayerId: id });
   },
+  requestFocus: (point) => {
+    set({ focusTarget: point });
+  },
+  clearFocusTarget: () => {
+    set({ focusTarget: null });
+  },
   reset: () => {
     set({
       selectedParcel: null,
@@ -43,6 +53,7 @@ export const useMapStore = create<MapState>((set) => ({
       isLoading: false,
       error: null,
       highlightLayerId: null,
+      focusTarget: null,
     });
   },
 }));

@@ -18,6 +18,13 @@ describe('useMapStore', () => {
     expect(useMapStore.getState().pendingPoint).toEqual({ lat: 52.23, lng: 21.01 });
   });
 
+  it('should set and clear focus target', () => {
+    useMapStore.getState().requestFocus({ lat: 52.1, lng: 21.2 });
+    expect(useMapStore.getState().focusTarget).toEqual({ lat: 52.1, lng: 21.2 });
+    useMapStore.getState().clearFocusTarget();
+    expect(useMapStore.getState().focusTarget).toBeNull();
+  });
+
   it('should set loading state', () => {
     useMapStore.getState().setLoading(true);
     expect(useMapStore.getState().isLoading).toBe(true);

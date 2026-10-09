@@ -181,6 +181,22 @@ export default function MapPage(): JSX.Element {
     };
   }, []);
 
+  const pendingFocus = useMapStore((s) => s.focusTarget);
+  const clearFocus = useMapStore((s) => s.clearFocusTarget);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || pendingFocus === null) {
+      return;
+    }
+    map.flyTo({
+      center: [pendingFocus.lng, pendingFocus.lat],
+      zoom: map.getZoom(),
+      duration: 500,
+    });
+    clearFocus();
+  }, [pendingFocus, mapReady, clearFocus]);
+
   const treeLayer = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null>(() => {
     if (mode === 'placing' || mode === 'editing') {
       if (pending === null) {
