@@ -104,9 +104,7 @@ async def test_download_powiat_when_404_then_raises(
     respx_mock: respx.MockRouter,
     tmp_path: Path,
 ) -> None:
-    respx_mock.get("https://example.com/egib/1401.gpkg").mock(
-        return_value=httpx.Response(404)
-    )
+    respx_mock.get("https://example.com/egib/1401.gpkg").mock(return_value=httpx.Response(404))
     with pytest.raises(DownloadError):
         await download_powiat("1401", tmp_path)
 
@@ -122,9 +120,7 @@ async def test_download_all_powiaty_when_concurrent_then_all_downloaded(
         for d in mock_powiat_list
     ]
     for p in powiats:
-        respx_mock.get(p.url).mock(
-            return_value=httpx.Response(200, content=fake_gpkg_bytes)
-        )
+        respx_mock.get(p.url).mock(return_value=httpx.Response(200, content=fake_gpkg_bytes))
 
     settings = DownloadSettings(concurrency=3, max_retries=2, backoff_base_seconds=0.001)
     results = await download_all_powiaty(powiats, tmp_path, settings=settings)
@@ -148,9 +144,7 @@ async def test_download_all_powiaty_when_one_fails_then_others_continue(
         if idx == 4:
             respx_mock.get(p.url).mock(return_value=httpx.Response(503))
         else:
-            respx_mock.get(p.url).mock(
-                return_value=httpx.Response(200, content=fake_gpkg_bytes)
-            )
+            respx_mock.get(p.url).mock(return_value=httpx.Response(200, content=fake_gpkg_bytes))
 
     settings = DownloadSettings(concurrency=5, max_retries=2, backoff_base_seconds=0.001)
     results = await download_all_powiaty(powiats, tmp_path, settings=settings)
@@ -183,13 +177,9 @@ async def test_download_all_powiaty_when_concurrency_bounded_then_respects_limit
     tmp_path: Path,
     fake_gpkg_bytes: bytes,
 ) -> None:
-    powiats = [
-        Powiat(teryt=f"140{i}", name="p", url=f"https://x/{i}.gpkg") for i in range(20)
-    ]
+    powiats = [Powiat(teryt=f"140{i}", name="p", url=f"https://x/{i}.gpkg") for i in range(20)]
     for p in powiats:
-        respx_mock.get(p.url).mock(
-            return_value=httpx.Response(200, content=fake_gpkg_bytes)
-        )
+        respx_mock.get(p.url).mock(return_value=httpx.Response(200, content=fake_gpkg_bytes))
 
     settings = DownloadSettings(concurrency=2, max_retries=1, backoff_base_seconds=0.001)
     results = await download_all_powiaty(powiats, tmp_path, settings=settings)
@@ -206,9 +196,7 @@ async def test_download_all_powiaty_when_input_empty_then_returns_empty(
 
 def test_summarize_results_when_all_success_then_zero_failed() -> None:
     results = [
-        DownloadResult(
-            powiat=Powiat(teryt="1401", name="p", url="u"), path=Path("x"), success=True
-        )
+        DownloadResult(powiat=Powiat(teryt="1401", name="p", url="u"), path=Path("x"), success=True)
     ]
     summary = summarize_results(results)
     assert summary == {

@@ -8,7 +8,8 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from hypothesis import HealthCheck, given, settings as hyp_settings
+from hypothesis import HealthCheck, given
+from hypothesis import settings as hyp_settings
 from hypothesis import strategies as st
 
 from egib_sync.pmtiles_gen import (
@@ -32,6 +33,12 @@ def out_pmtiles(tmp_path: Path) -> Path:
     return tmp_path / "output.pmtiles"
 
 
+@pytest.fixture(autouse=True)
+def skip_gpkg_conversion(monkeypatch: Any):
+    """Subprocess is mocked in these tests; disable the GPKG→GeoJSONSeq step."""
+    monkeypatch.setattr("egib_sync.pmtiles_gen._gpkg_to_geojsonl", lambda gpkg, out: gpkg)
+
+
 def _ok_completed_process() -> MagicMock:
     cp = MagicMock(spec=subprocess.CompletedProcess)
     cp.returncode = 0
@@ -48,9 +55,7 @@ def _fail_completed_process(returncode: int = 1, stderr: str = "boom") -> MagicM
     return cp
 
 
-def test_generate_pmtiles_when_input_missing_then_raises(
-    tmp_path: Path, out_pmtiles: Path
-) -> None:
+def test_generate_pmtiles_when_input_missing_then_raises(tmp_path: Path, out_pmtiles: Path) -> None:
     with pytest.raises(FileNotFoundError):
         generate_pmtiles(tmp_path / "nope.gpkg", out_pmtiles)
 
@@ -101,9 +106,7 @@ def test_generate_pmtiles_when_success_then_output_exists_and_atomic(
 ) -> None:
     fake_bin = "/usr/local/bin/tippecanoe"
 
-    def fake_run(
-        cmd: list[str], check: bool = False, **_: Any
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(cmd: list[str], check: bool = False, **_: Any) -> subprocess.CompletedProcess[str]:
         out_arg = next(c for c in cmd if c.startswith("--output="))
         out_path = Path(out_arg.split("=", 1)[1])
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,15 +125,11 @@ def test_generate_pmtiles_when_success_then_output_exists_and_atomic(
     assert not (out_pmtiles.parent / f".{out_pmtiles.name}.tmp").exists()
 
 
-def test_generate_pmtiles_writes_to_tmp_not_final_path(
-    fake_gpkg: Path, out_pmtiles: Path
-) -> None:
+def test_generate_pmtiles_writes_to_tmp_not_final_path(fake_gpkg: Path, out_pmtiles: Path) -> None:
     fake_bin = "/usr/local/bin/tippecanoe"
     captured_cmd: dict[str, Any] = {}
 
-    def fake_run(
-        cmd: list[str], check: bool = False, **_: Any
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(cmd: list[str], check: bool = False, **_: Any) -> subprocess.CompletedProcess[str]:
         captured_cmd["cmd"] = list(cmd)
         out_arg = next(c for c in cmd if c.startswith("--output="))
         out_path = Path(out_arg.split("=", 1)[1])
@@ -153,9 +152,7 @@ def test_generate_pmtiles_passes_correct_flags_to_subprocess(
     fake_bin = "/usr/local/bin/tippecanoe"
     captured_cmd: dict[str, Any] = {}
 
-    def fake_run(
-        cmd: list[str], check: bool = False, **_: Any
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(cmd: list[str], check: bool = False, **_: Any) -> subprocess.CompletedProcess[str]:
         captured_cmd["cmd"] = list(cmd)
         out_arg = next(c for c in cmd if c.startswith("--output="))
         Path(out_arg.split("=", 1)[1]).write_bytes(b"X")
@@ -192,9 +189,7 @@ def test_generate_pmtiles_when_drop_densest_false_then_no_flag(
     fake_bin = "/usr/local/bin/tippecanoe"
     captured_cmd: dict[str, Any] = {}
 
-    def fake_run(
-        cmd: list[str], check: bool = False, **_: Any
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(cmd: list[str], check: bool = False, **_: Any) -> subprocess.CompletedProcess[str]:
         captured_cmd["cmd"] = list(cmd)
         out_arg = next(c for c in cmd if c.startswith("--output="))
         Path(out_arg.split("=", 1)[1]).write_bytes(b"X")
@@ -216,9 +211,7 @@ def test_generate_pmtiles_uses_settings_path_when_provided(
 ) -> None:
     fake_bin = "/custom/path/to/tippecanoe"
 
-    def fake_run(
-        cmd: list[str], check: bool = False, **_: Any
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(cmd: list[str], check: bool = False, **_: Any) -> subprocess.CompletedProcess[str]:
         out_arg = next(c for c in cmd if c.startswith("--output="))
         Path(out_arg.split("=", 1)[1]).write_bytes(b"X")
         return _ok_completed_process()
@@ -248,9 +241,7 @@ def test_generate_pmtiles_when_subprocess_oserror_then_raises_tippecanoe_not_fou
         generate_pmtiles(fake_gpkg, out_pmtiles)
 
 
-def test_generate_pmtiles_when_no_output_then_raises(
-    fake_gpkg: Path, out_pmtiles: Path
-) -> None:
+def test_generate_pmtiles_when_no_output_then_raises(fake_gpkg: Path, out_pmtiles: Path) -> None:
     fake_bin = "/usr/local/bin/tippecanoe"
 
     def fake_run(*_: Any, **__: Any) -> subprocess.CompletedProcess[str]:
@@ -264,14 +255,10 @@ def test_generate_pmtiles_when_no_output_then_raises(
         generate_pmtiles(fake_gpkg, out_pmtiles)
 
 
-def test_generate_pmtiles_failure_cleans_up_tmp(
-    fake_gpkg: Path, out_pmtiles: Path
-) -> None:
+def test_generate_pmtiles_failure_cleans_up_tmp(fake_gpkg: Path, out_pmtiles: Path) -> None:
     fake_bin = "/usr/local/bin/tippecanoe"
 
-    def fake_run(
-        cmd: list[str], check: bool = False, **_: Any
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(cmd: list[str], check: bool = False, **_: Any) -> subprocess.CompletedProcess[str]:
         out_arg = next(c for c in cmd if c.startswith("--output="))
         Path(out_arg.split("=", 1)[1]).write_bytes(b"partial")
         return _fail_completed_process(returncode=2, stderr="err")

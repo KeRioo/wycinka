@@ -118,16 +118,12 @@ async def _download_one(
 ) -> DownloadResult:
     out_path = output_dir / f"{powiat.teryt}.gpkg"
     if out_path.exists() and out_path.stat().st_size > 0:
-        logger.debug(
-            "download_skip_exists", teryt=powiat.teryt, path=str(out_path)
-        )
+        logger.debug("download_skip_exists", teryt=powiat.teryt, path=str(out_path))
         return DownloadResult(powiat=powiat, path=out_path, success=True)
 
     async with semaphore:
         try:
-            content = await fetch_with_retry(
-                client, powiat.url
-            )
+            content = await fetch_with_retry(client, powiat.url)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = out_path.with_suffix(out_path.suffix + ".part")
             async with aiofiles.open(tmp_path, "wb") as f:
@@ -190,9 +186,7 @@ async def download_powiat(
             powiat, output_dir, settings=settings, client=client, semaphore=semaphore
         )
     if not result.success:
-        raise DownloadError(
-            f"failed to download {teryt}: {result.error}"
-        )
+        raise DownloadError(f"failed to download {teryt}: {result.error}")
     return result.path
 
 

@@ -9,14 +9,15 @@ from typing import Any
 
 import geopandas as gpd
 import pytest
-from hypothesis import HealthCheck, given, settings as hyp_settings
+from hypothesis import HealthCheck, given
+from hypothesis import settings as hyp_settings
 from hypothesis import strategies as st
 from shapely.geometry import Polygon, box
 
 from egib_sync.merger import write_minimal_gpkg
 from egib_sync.sqlite_loader import (
-    GpkgSchemaError,
     SCHEMA_VERSION,
+    GpkgSchemaError,
     geojson_parcel,
     init_db,
     iter_parcels_as_geojson,
@@ -106,17 +107,13 @@ def test_init_db_creates_parents(tmp_path: Path) -> None:
     assert db.exists()
 
 
-def test_load_parcels_from_gpkg_when_valid_then_imports(
-    small_gpkg: Path, db_path: Path
-) -> None:
+def test_load_parcels_from_gpkg_when_valid_then_imports(small_gpkg: Path, db_path: Path) -> None:
     n = load_parcels_from_gpkg(small_gpkg, db_path)
     assert n == 3
     assert parcels_count(db_path) == 3
 
 
-def test_load_parcels_from_gpkg_creates_rtree_rows(
-    small_gpkg: Path, db_path: Path
-) -> None:
+def test_load_parcels_from_gpkg_creates_rtree_rows(small_gpkg: Path, db_path: Path) -> None:
     load_parcels_from_gpkg(small_gpkg, db_path)
     conn = sqlite3.connect(str(db_path))
     try:
@@ -147,9 +144,7 @@ def test_load_parcels_from_gpkg_maps_text_ids_to_rtree_rowids(
             assert isinstance(rtree_id, int)
             assert rtree_id > 0
             assert (
-                conn.execute(
-                    "SELECT 1 FROM parcels_rtree WHERE id = ?", (rtree_id,)
-                ).fetchone()
+                conn.execute("SELECT 1 FROM parcels_rtree WHERE id = ?", (rtree_id,)).fetchone()
                 is not None
             )
     finally:
@@ -161,23 +156,21 @@ def test_load_parcels_when_missing_input_then_raises(tmp_path: Path, db_path: Pa
         load_parcels_from_gpkg(tmp_path / "nope.gpkg", db_path)
 
 
-def test_load_parcels_when_gpkg_missing_columns_then_raises(
-    tmp_path: Path, db_path: Path
-) -> None:
+def test_load_parcels_when_gpkg_missing_columns_then_raises(tmp_path: Path, db_path: Path) -> None:
     bad = tmp_path / "bad.gpkg"
     import pandas as pd
 
     gdf = gpd.GeoDataFrame(
-        {"foo": ["a", "b"]}, geometry=[Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), None], crs="EPSG:4326"
+        {"foo": ["a", "b"]},
+        geometry=[Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]), None],
+        crs="EPSG:4326",
     )
     gdf.to_file(str(bad), driver="GPKG")
     with pytest.raises(GpkgSchemaError):
         load_parcels_from_gpkg(bad, db_path)
 
 
-def test_load_parcels_when_empty_gpkg_then_zero(
-    tmp_path: Path, db_path: Path
-) -> None:
+def test_load_parcels_when_empty_gpkg_then_zero(tmp_path: Path, db_path: Path) -> None:
     empty = tmp_path / "empty.gpkg"
     gdf = gpd.GeoDataFrame(
         {"id": [], "teryt": [], "geometry": []}, geometry="geometry", crs="EPSG:4326"
@@ -188,9 +181,7 @@ def test_load_parcels_when_empty_gpkg_then_zero(
     assert parcels_count(db_path) == 0
 
 
-def test_load_parcels_full_reload_truncates_existing(
-    small_gpkg: Path, db_path: Path
-) -> None:
+def test_load_parcels_full_reload_truncates_existing(small_gpkg: Path, db_path: Path) -> None:
     load_parcels_from_gpkg(small_gpkg, db_path)
     assert parcels_count(db_path) == 3
     load_parcels_from_gpkg(small_gpkg, db_path)
@@ -222,7 +213,12 @@ def test_load_parcels_1000_parcels_under_5s(tmp_path: Path, db_path: Path) -> No
         "land_use": ["Ls"] * n_rows,
     }
     polygons = [
-        box(base_lng + i * step, base_lat + j * step, base_lng + (i + 1) * step, base_lat + (j + 1) * step)
+        box(
+            base_lng + i * step,
+            base_lat + j * step,
+            base_lng + (i + 1) * step,
+            base_lat + (j + 1) * step,
+        )
         for j in range(1)
         for i in range(n_rows)
     ]
@@ -238,9 +234,7 @@ def test_load_parcels_1000_parcels_under_5s(tmp_path: Path, db_path: Path) -> No
     assert elapsed < 5.0, f"load took {elapsed:.2f}s for {n_rows} rows"
 
 
-def test_point_query_when_point_inside_parcel_returns_it(
-    small_gpkg: Path, db_path: Path
-) -> None:
+def test_point_query_when_point_inside_parcel_returns_it(small_gpkg: Path, db_path: Path) -> None:
     load_parcels_from_gpkg(small_gpkg, db_path)
     result = point_query(db_path, lat=52.002, lng=21.002)
     assert result is not None
@@ -270,9 +264,7 @@ def test_point_query_when_db_missing_then_raises(tmp_path: Path) -> None:
         point_query(tmp_path / "nope.sqlite", lat=52.0, lng=21.0)
 
 
-def test_point_query_returns_full_parcel_dict(
-    small_gpkg: Path, db_path: Path
-) -> None:
+def test_point_query_returns_full_parcel_dict(small_gpkg: Path, db_path: Path) -> None:
     load_parcels_from_gpkg(small_gpkg, db_path)
     result = point_query(db_path, lat=52.002, lng=21.002)
     assert result is not None
@@ -295,9 +287,7 @@ def test_point_query_returns_full_parcel_dict(
         assert key in result
 
 
-def test_update_sync_meta_when_called_then_persists_keys(
-    db_path: Path, tmp_path: Path
-) -> None:
+def test_update_sync_meta_when_called_then_persists_keys(db_path: Path, tmp_path: Path) -> None:
     init_db(db_path)
     pmt = tmp_path / "poland.pmtiles"
     update_sync_meta(
@@ -313,9 +303,7 @@ def test_update_sync_meta_when_called_then_persists_keys(
     assert "last_sync" in meta
 
 
-def test_update_sync_meta_when_extras_then_persists_too(
-    db_path: Path, tmp_path: Path
-) -> None:
+def test_update_sync_meta_when_extras_then_persists_too(db_path: Path, tmp_path: Path) -> None:
     update_sync_meta(
         db_path,
         parcels_count=5,
@@ -354,9 +342,7 @@ def test_vacuum_when_db_present_then_succeeds(db_path: Path) -> None:
     vacuum(db_path)
 
 
-def test_geojson_parcel_when_called_then_returns_feature(
-    small_gpkg: Path, db_path: Path
-) -> None:
+def test_geojson_parcel_when_called_then_returns_feature(small_gpkg: Path, db_path: Path) -> None:
     load_parcels_from_gpkg(small_gpkg, db_path)
     parcel = point_query(db_path, lat=52.002, lng=21.002)
     assert parcel is not None
@@ -367,9 +353,7 @@ def test_geojson_parcel_when_called_then_returns_feature(
     assert "geom_wkt" not in gj["properties"]
 
 
-def test_iter_parcels_as_geojson_streams_all(
-    small_gpkg: Path, db_path: Path
-) -> None:
+def test_iter_parcels_as_geojson_streams_all(small_gpkg: Path, db_path: Path) -> None:
     load_parcels_from_gpkg(small_gpkg, db_path)
     features = list(iter_parcels_as_geojson(db_path, batch_size=2))
     assert len(features) == 3
@@ -454,9 +438,7 @@ def test_load_parcels_reprojects_to_wgs84(tmp_path: Path, db_path: Path) -> None
         conn.close()
 
 
-def test_load_parcels_skips_features_without_geometry(
-    tmp_path: Path, db_path: Path
-) -> None:
+def test_load_parcels_skips_features_without_geometry(tmp_path: Path, db_path: Path) -> None:
     poly_a = Polygon([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)])
     columns = {
         "id": ["ok_1", "none_1", "ok_2"],
@@ -481,9 +463,7 @@ def test_load_parcels_skips_features_without_geometry(
     assert parcels_count(db_path) == 2
 
 
-def _make_random_parcels_gdf(
-    n: int, *, seed: int = 0
-) -> gpd.GeoDataFrame:
+def _make_random_parcels_gdf(n: int, *, seed: int = 0) -> gpd.GeoDataFrame:
     import random
 
     rng = random.Random(seed)

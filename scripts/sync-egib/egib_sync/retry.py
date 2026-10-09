@@ -27,9 +27,7 @@ class RetryError(RuntimeError):
         self.last_exception = last_exception
 
 
-def _calculate_delay(
-    attempt: int, base_delay: float, max_delay: float, jitter: bool
-) -> float:
+def _calculate_delay(attempt: int, base_delay: float, max_delay: float, jitter: bool) -> float:
     expo = base_delay * (2 ** (attempt - 1))
     capped = min(expo, max_delay)
     if jitter:
@@ -73,9 +71,7 @@ def retry(
                     )
                     await asyncio.sleep(delay)
             assert last_exc is not None
-            logger.error(
-                "retry_exhausted", fn=fn.__name__, attempts=max_attempts
-            )
+            logger.error("retry_exhausted", fn=fn.__name__, attempts=max_attempts)
             raise RetryError(max_attempts, last_exc) from last_exc
 
         return wrapper

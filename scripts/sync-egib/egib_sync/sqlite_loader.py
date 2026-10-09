@@ -303,8 +303,7 @@ def _flush(conn: sqlite3.Connection, buffer: list[tuple[Any, ...]]) -> int:
 
     map_sql = "INSERT INTO parcels_rtree_map(parcel_id, rtree_id) VALUES (?, ?)"
     index_sql = (
-        "INSERT INTO parcels_rtree(id, min_lng, max_lng, min_lat, max_lat) "
-        "VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO parcels_rtree(id, min_lng, max_lng, min_lat, max_lat) VALUES (?, ?, ?, ?, ?)"
     )
     map_rows: list[tuple[str, int]] = []
     for row in buffer:
