@@ -50,11 +50,7 @@ export function usePendingMarkerDrag(options: PendingDragOptions): void {
     const resolve = (lngLat: { lat: number; lng: number }): LatLng => {
       const { vertices } = optionsRef.current;
       const threshold = snapThresholdMeters(map.getZoom(), map.getCenter().lat);
-      const snapped = snapToVertex(
-        { lat: lngLat.lat, lng: lngLat.lng },
-        vertices,
-        threshold,
-      );
+      const snapped = snapToVertex({ lat: lngLat.lat, lng: lngLat.lng }, vertices, threshold);
       const pos = snapped !== null ? snapped.point : { lat: lngLat.lat, lng: lngLat.lng };
       if (snapped !== null) {
         marker.setLngLat([pos.lng, pos.lat]).addTo(map);

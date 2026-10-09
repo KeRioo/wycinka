@@ -65,7 +65,11 @@ test.describe('Settings flows (BACKLOG C)', () => {
     });
 
     await context.route('**/api/v1/pmtiles/**', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({}),
+      });
     });
   });
 

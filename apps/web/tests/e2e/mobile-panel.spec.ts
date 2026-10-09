@@ -156,8 +156,9 @@ test.describe('Mobile — AddTreePanel bottom sheet', () => {
     await expect
       .poll(async () =>
         page.evaluate(() => {
-          const map = (window as unknown as { wycinkaMap?: { getCenter: () => { lat: number; lng: number } } })
-            .wycinkaMap;
+          const map = (
+            window as unknown as { wycinkaMap?: { getCenter: () => { lat: number; lng: number } } }
+          ).wycinkaMap;
           return map === undefined ? null : map.getCenter();
         }),
       )
@@ -172,7 +173,9 @@ test.describe('Mobile — single parcel card', () => {
     await mockBackend(context);
   });
 
-  test('should show one compact parcel card collapsed with TERYT after map click', async ({ page }) => {
+  test('should show one compact parcel card collapsed with TERYT after map click', async ({
+    page,
+  }) => {
     await page.goto('/map');
     await ensureProject(page);
     await page.waitForTimeout(1500);

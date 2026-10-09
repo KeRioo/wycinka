@@ -174,10 +174,7 @@ test.describe('Tree list and marker popup', () => {
     await page.getByTestId('tree-list-toggle').click();
     await expect(page.getByTestId('tree-list-panel')).toBeVisible();
 
-    await page
-      .getByTestId('tree-list-item')
-      .getByRole('button', { name: 'Usuń drzewo' })
-      .click();
+    await page.getByTestId('tree-list-item').getByRole('button', { name: 'Usuń drzewo' }).click();
     await expect(page.getByTestId('tree-list-empty')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('tree-list-item')).toHaveCount(0);
   });

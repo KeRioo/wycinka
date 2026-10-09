@@ -82,12 +82,15 @@ export class WycinkaDB extends Dexie {
         trees: 'id, projectId, species, capturedAt',
       })
       .upgrade(async (tx) => {
-        await tx.table('projects').toCollection().modify((raw: unknown) => {
-          if (isProjectLike(raw)) {
-            return normalizeProjectConfig(raw);
-          }
-          return raw;
-        });
+        await tx
+          .table('projects')
+          .toCollection()
+          .modify((raw: unknown) => {
+            if (isProjectLike(raw)) {
+              return normalizeProjectConfig(raw);
+            }
+            return raw;
+          });
       });
     this.version(3).stores({
       projects: 'id, name, createdAt, updatedAt',
@@ -108,12 +111,14 @@ export function normalizeProjectConfig(project: Partial<Project> & { id: string 
     ...(project.teryt !== undefined ? { teryt: project.teryt } : {}),
     ...(project.polygon !== undefined ? { polygon: project.polygon } : {}),
     ...(project.bbox !== undefined ? { bbox: project.bbox } : {}),
-    speciesConfig: Array.isArray(project.speciesConfig) && project.speciesConfig.length > 0
-      ? project.speciesConfig
-      : [...DEFAULT_SPECIES],
-    rangesConfig: Array.isArray(project.rangesConfig) && project.rangesConfig.length > 0
-      ? project.rangesConfig
-      : [...DEFAULT_RANGES],
+    speciesConfig:
+      Array.isArray(project.speciesConfig) && project.speciesConfig.length > 0
+        ? project.speciesConfig
+        : [...DEFAULT_SPECIES],
+    rangesConfig:
+      Array.isArray(project.rangesConfig) && project.rangesConfig.length > 0
+        ? project.rangesConfig
+        : [...DEFAULT_RANGES],
     pdfPrefs: { ...DEFAULT_PDF_PREFS, ...project.pdfPrefs },
     ...(project.uldkMeta !== undefined ? { uldkMeta: project.uldkMeta } : {}),
     createdAt: project.createdAt ?? new Date(0),
@@ -208,7 +213,10 @@ export async function listProjectParcels(projectId: string): Promise<ProjectParc
   return db.project_parcels.where('projectId').equals(projectId).toArray();
 }
 
-export async function addParcelToProjectDb(projectId: string, parcel: Parcel): Promise<ProjectParcel> {
+export async function addParcelToProjectDb(
+  projectId: string,
+  parcel: Parcel,
+): Promise<ProjectParcel> {
   const existing = await db.project_parcels
     .where('projectId')
     .equals(projectId)
@@ -241,7 +249,10 @@ export async function removeParcelFromProjectDb(projectId: string, teryt: string
   await db.project_parcels.bulkDelete(rows.map((row) => row.id));
 }
 
-export async function findParcelInProject(projectId: string, teryt: string): Promise<ProjectParcel | undefined> {
+export async function findParcelInProject(
+  projectId: string,
+  teryt: string,
+): Promise<ProjectParcel | undefined> {
   return db.project_parcels
     .where('projectId')
     .equals(projectId)
@@ -249,7 +260,9 @@ export async function findParcelInProject(projectId: string, teryt: string): Pro
     .first();
 }
 
-export async function addTree(tree: Omit<Tree, 'id' | 'capturedAt'> & { capturedAt?: Date }): Promise<Tree> {
+export async function addTree(
+  tree: Omit<Tree, 'id' | 'capturedAt'> & { capturedAt?: Date },
+): Promise<Tree> {
   const fullTree: Tree = {
     ...tree,
     id: crypto.randomUUID(),

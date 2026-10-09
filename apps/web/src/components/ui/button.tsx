@@ -10,9 +10,12 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-forest-700 text-white hover:bg-forest-800 active:bg-forest-900 disabled:bg-forest-300',
-  secondary: 'bg-stone-100 text-forest-900 hover:bg-stone-200 active:bg-stone-200 disabled:bg-stone-50 disabled:text-stone-400',
-  ghost: 'bg-transparent text-forest-700 hover:bg-forest-50 active:bg-forest-100 disabled:text-stone-400',
+  primary:
+    'bg-forest-700 text-white hover:bg-forest-800 active:bg-forest-900 disabled:bg-forest-300',
+  secondary:
+    'bg-stone-100 text-forest-900 hover:bg-stone-200 active:bg-stone-200 disabled:bg-stone-50 disabled:text-stone-400',
+  ghost:
+    'bg-transparent text-forest-700 hover:bg-forest-50 active:bg-forest-100 disabled:text-stone-400',
   danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 disabled:bg-red-300',
 };
 

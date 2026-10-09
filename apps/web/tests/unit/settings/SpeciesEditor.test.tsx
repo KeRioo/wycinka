@@ -9,7 +9,11 @@ const INITIAL: SpeciesConfig[] = [
   { name: 'Brzoza', color: '#fef3c7' },
 ];
 
-function setup(onSave: (species: SpeciesConfig[]) => Promise<void> = vi.fn((): Promise<void> => Promise.resolve())) {
+function setup(
+  onSave: (species: SpeciesConfig[]) => Promise<void> = vi.fn((): Promise<void> =>
+    Promise.resolve(),
+  ),
+) {
   render(<SpeciesEditor initial={INITIAL} onSave={onSave} />);
   return onSave;
 }
@@ -81,7 +85,10 @@ describe('SpeciesEditor', () => {
 
   it('should show save failure as error', async () => {
     render(
-      <SpeciesEditor initial={INITIAL} onSave={(): Promise<void> => Promise.reject(new Error('boom'))} />
+      <SpeciesEditor
+        initial={INITIAL}
+        onSave={(): Promise<void> => Promise.reject(new Error('boom'))}
+      />,
     );
     await userEvent.click(screen.getByTestId('species-save'));
     expect(screen.getByTestId('species-error')).toHaveTextContent('boom');

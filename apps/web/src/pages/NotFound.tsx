@@ -7,7 +7,9 @@ export default function NotFound(): JSX.Element {
       <div className="max-w-md space-y-4 text-center">
         <p className="text-6xl font-bold text-forest-700">404</p>
         <h1 className="text-2xl font-semibold text-forest-900">Nie znaleziono strony</h1>
-        <p className="text-stone-600">Strona, której szukasz, nie istnieje lub została przeniesiona.</p>
+        <p className="text-stone-600">
+          Strona, której szukasz, nie istnieje lub została przeniesiona.
+        </p>
         <Link to="/">
           <Button>Wróć na stronę główną</Button>
         </Link>

@@ -53,7 +53,12 @@ async function ensureProjectAndFab(page: Page): Promise<void> {
       await createBtn.click({ force: true });
       await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
     }
-    if (await page.getByTestId('fab-add-tree').isVisible().catch(() => false)) {
+    if (
+      await page
+        .getByTestId('fab-add-tree')
+        .isVisible()
+        .catch(() => false)
+    ) {
       break;
     }
     await page.waitForTimeout(500);
@@ -176,8 +181,7 @@ test.describe('Snap-to-vertex pinezki', () => {
     await expect(page.getByTestId('snap-indicator')).toBeVisible({ timeout: 5_000 });
     await page.mouse.up();
 
-    await expect(page.getByTestId('pending-position'))
-.toHaveText(
+    await expect(page.getByTestId('pending-position')).toHaveText(
       `${VERTEX.lat.toFixed(5)}, ${VERTEX.lng.toFixed(5)}`,
       { timeout: 5_000 },
     );

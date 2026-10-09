@@ -172,7 +172,17 @@ describe('useProjectStore parcels', () => {
     region_name: 'Obręb 0001',
     area_m2: 1234.56,
     land_use: 'Ls',
-    geom: { type: 'Polygon' as const, coordinates: [[[21.006, 52.231], [21.007, 52.231], [21.007, 52.232], [21.006, 52.231]]] },
+    geom: {
+      type: 'Polygon' as const,
+      coordinates: [
+        [
+          [21.006, 52.231],
+          [21.007, 52.231],
+          [21.007, 52.232],
+          [21.006, 52.231],
+        ],
+      ],
+    },
     bbox: [21.006, 52.231, 21.007, 52.232] as const,
     centroid: [21.0065, 52.2315] as const,
     fetched_at: '2026-09-29T03:00:00Z',
@@ -264,7 +274,7 @@ describe('useProjectStore parcels', () => {
   it('should cascade project parcels with deleteProject', async () => {
     await useProjectStore.getState().createAndActivate('Las');
     await useProjectStore.getState().addParcelToProject(makeParcel('T1'));
-    const id = useProjectStore.getState().activeProjectId!
+    const id = useProjectStore.getState().activeProjectId!;
     await useProjectStore.getState().deleteProject(id);
     expect(useProjectStore.getState().projectParcels).toHaveLength(0);
     expect(await db.project_parcels.count()).toBe(0);

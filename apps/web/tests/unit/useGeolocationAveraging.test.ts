@@ -37,12 +37,7 @@ function installMockGeolocation(): void {
   });
 }
 
-function makePosition(
-  lat: number,
-  lng: number,
-  accuracy: number,
-  timestamp: number,
-): MockPosition {
+function makePosition(lat: number, lng: number, accuracy: number, timestamp: number): MockPosition {
   return { coords: { latitude: lat, longitude: lng, accuracy }, timestamp };
 }
 
@@ -52,9 +47,14 @@ interface WatchHarness {
 
 let pushToWatch: (pos: MockPosition) => void;
 
-type GeolocationHookResult = RenderHookResult<ReturnType<typeof useGeolocation>, UseGeolocationOptions>;
+type GeolocationHookResult = RenderHookResult<
+  ReturnType<typeof useGeolocation>,
+  UseGeolocationOptions
+>;
 
-function renderAveragingHook(options: UseGeolocationOptions): WatchHarness & { result: GeolocationHookResult['result'] } {
+function renderAveragingHook(
+  options: UseGeolocationOptions,
+): WatchHarness & { result: GeolocationHookResult['result'] } {
   mockGeolocation.watchPosition.mockImplementation((success: SuccessCallback) => {
     pushToWatch = (pos: MockPosition) => {
       act(() => {
@@ -204,8 +204,7 @@ describe('useGeolocation averaging', () => {
       result.current.refresh();
     });
     const pushAfterRefresh = mockGeolocation.watchPosition.mock.calls.at(-1)?.[0] as
-      | SuccessCallback
-      | undefined;
+      SuccessCallback | undefined;
     expect(pushAfterRefresh).toBeDefined();
     act(() => {
       pushAfterRefresh?.(makePosition(50.0, 20.0, 10, 5000));

@@ -14,8 +14,7 @@ export interface SnapResult {
 
 export function extractVertexPoints(geom: Geometry): LatLng[] {
   const vertices: LatLng[] = [];
-  const rings =
-    geom.type === 'Polygon' ? geom.coordinates : geom.coordinates.flat();
+  const rings = geom.type === 'Polygon' ? geom.coordinates : geom.coordinates.flat();
   for (const ring of rings) {
     for (const [lng, lat] of ring) {
       vertices.push({ lat, lng });

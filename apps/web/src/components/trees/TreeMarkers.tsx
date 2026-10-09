@@ -11,9 +11,7 @@ export interface TreeFeatureProperties {
   pending?: boolean;
 }
 
-const speciesColorLookup = new Map<string, string>(
-  DEFAULT_SPECIES.map((s) => [s.name, s.color]),
-);
+const speciesColorLookup = new Map<string, string>(DEFAULT_SPECIES.map((s) => [s.name, s.color]));
 
 export function treeToFeature(
   tree: Tree,

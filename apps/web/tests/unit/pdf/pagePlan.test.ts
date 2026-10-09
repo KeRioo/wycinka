@@ -28,9 +28,7 @@ describe('buildPdfPagePlan', () => {
   });
 
   it('should force separate table pages when layout is one-per-page', () => {
-    const plan = buildPdfPagePlan(
-      prefs({ layout: 'one-per-page', tableOnSeparatePage: false }),
-    );
+    const plan = buildPdfPagePlan(prefs({ layout: 'one-per-page', tableOnSeparatePage: false }));
     expect(plan).toEqual([
       { map: true, rangesTable: false, fullTable: false },
       { map: false, rangesTable: true, fullTable: false },

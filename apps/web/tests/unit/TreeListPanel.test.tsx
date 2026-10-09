@@ -74,9 +74,7 @@ describe('TreeListPanel', () => {
         onEditTree={handlers.onEditTree}
       />,
     );
-    expect(screen.getByTestId('tree-list-empty')).toHaveTextContent(
-      'Brak drzew w tym projekcie.',
-    );
+    expect(screen.getByTestId('tree-list-empty')).toHaveTextContent('Brak drzew w tym projekcie.');
     expect(screen.queryByTestId('tree-list-item')).not.toBeInTheDocument();
   });
 

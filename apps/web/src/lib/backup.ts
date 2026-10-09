@@ -73,16 +73,12 @@ const projectSchema = z.object({
   teryt: z.string().optional(),
   polygon: z.string().nullable().optional(),
   bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
-  speciesConfig: z
-    .array(z.object({ name: z.string().min(1), color: z.string().min(1) }))
-    .min(1),
+  speciesConfig: z.array(z.object({ name: z.string().min(1), color: z.string().min(1) })).min(1),
   rangesConfig: z
     .array(z.object({ from: z.number(), to: z.number().nullable(), label: z.string().min(1) }))
     .min(1),
   pdfPrefs: pdfPrefsSchema,
-  uldkMeta: z
-    .object({ fetchedAt: z.string().min(1), datasource: z.string().min(1) })
-    .optional(),
+  uldkMeta: z.object({ fetchedAt: z.string().min(1), datasource: z.string().min(1) }).optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 });

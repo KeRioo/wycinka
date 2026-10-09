@@ -81,9 +81,11 @@ describe('useGeolocation', () => {
 
   it('should set error after error callback', () => {
     const calls = { error: null as ErrorCallback | null };
-    mockGeolocation.getCurrentPosition.mockImplementation((_success: unknown, error: ErrorCallback) => {
-      calls.error = error;
-    });
+    mockGeolocation.getCurrentPosition.mockImplementation(
+      (_success: unknown, error: ErrorCallback) => {
+        calls.error = error;
+      },
+    );
     const { result } = renderHook(() => useGeolocation());
     const cb = calls.error;
     expect(cb).not.toBeNull();

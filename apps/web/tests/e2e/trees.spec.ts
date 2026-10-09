@@ -10,7 +10,12 @@ async function ensureProjectAndFab(page: import('@playwright/test').Page): Promi
       await createBtn.click({ force: true });
       await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
     }
-    if (await page.getByTestId('fab-add-tree').isVisible().catch(() => false)) {
+    if (
+      await page
+        .getByTestId('fab-add-tree')
+        .isVisible()
+        .catch(() => false)
+    ) {
       break;
     }
     await page.waitForTimeout(500);

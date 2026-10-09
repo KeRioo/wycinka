@@ -44,9 +44,9 @@ vi.mock('pmtiles', () => ({
 }));
 
 function getMapClickHandler(): (payload: unknown) => void {
-  const found = mapInstance.on.mock.calls.filter(
-    (args) => args[0] === 'click' && args.length === 2,
-  ).at(-1);
+  const found = mapInstance.on.mock.calls
+    .filter((args) => args[0] === 'click' && args.length === 2)
+    .at(-1);
   if (found === undefined) {
     throw new Error('map click handler was not registered');
   }

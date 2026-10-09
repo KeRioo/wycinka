@@ -21,7 +21,12 @@ async function openPanelWithArrowPad(page: Page): Promise<void> {
       await createBtn.click({ force: true });
       await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
     }
-    if (await page.getByTestId('fab-add-tree').isVisible().catch(() => false)) {
+    if (
+      await page
+        .getByTestId('fab-add-tree')
+        .isVisible()
+        .catch(() => false)
+    ) {
       break;
     }
     await page.waitForTimeout(500);
@@ -78,7 +83,11 @@ test.describe('ArrowPad hold-to-repeat (BACKLOG #8)', () => {
     });
 
     await context.route('**/api/v1/pmtiles/**', async (route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({}),
+      });
     });
   });
 

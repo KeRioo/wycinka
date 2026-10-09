@@ -102,7 +102,12 @@ describe('BackupPanel', () => {
     await createProject({ name: 'Projekt' });
     render(<BackupPanel />);
 
-    const future = { schemaVersion: BACKUP_SCHEMA_VERSION + 1, exportedAt: '2026-10-09T12:00:00Z', projects: [], trees: [] };
+    const future = {
+      schemaVersion: BACKUP_SCHEMA_VERSION + 1,
+      exportedAt: '2026-10-09T12:00:00Z',
+      projects: [],
+      trees: [],
+    };
     const file = new File([JSON.stringify(future)], 'backup.json', { type: 'application/json' });
     await userEvent.upload(screen.getByTestId('backup-file-input'), file);
     await userEvent.click(screen.getByTestId('backup-import'));

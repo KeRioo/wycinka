@@ -41,7 +41,11 @@ export default function PdfPrefsEditor({ initial, onSave }: PdfPrefsEditorProps)
   };
 
   const handleSave = async (): Promise<void> => {
-    if (prefs.markerScale.baseSize < 0 || prefs.markerScale.perCm < 0 || prefs.markerScale.maxSize <= 0) {
+    if (
+      prefs.markerScale.baseSize < 0 ||
+      prefs.markerScale.perCm < 0 ||
+      prefs.markerScale.maxSize <= 0
+    ) {
       setError('Skala markerów: rozmiary nieujemne, maxSize > 0.');
       return;
     }

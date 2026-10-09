@@ -1,17 +1,10 @@
 import { jsPDF } from 'jspdf';
 import type { Project, Tree } from '@/db/schema';
-import { getSpeciesColor, markerSizeForCm } from '@/lib/geo';
 import { formatDate } from '@/lib/dates';
+import type { LngLat } from '@/services/api.types';
 import { buildNumberedRows, buildRangesTable, buildSummary } from './rangesTable';
-import {
-  bboxOf,
-  chooseRotation,
-  makeProjector,
-  polygonPoints,
-  rotatePoints,
-  type LngLat,
-  type Rect,
-} from './geometry';
+import { MAP_RECT_COMPACT, MAP_RECT_FULL, computeMapLayout } from './mapLayout';
+export { collectMapRings } from './mapLayout';
 import { compassNeedle } from './compass';
 import { buildPdfPagePlan, type PdfPagePlan } from './pagePlan';
 import type { Parcel, ParcelAggregateResponse } from '@/services/api.types';
@@ -20,9 +13,11 @@ const PAGE_W = 210;
 const PAGE_H = 297;
 const MARGIN = 12;
 const CONTENT_W = PAGE_W - MARGIN * 2;
-const MAP_RECT: Rect = { x: MARGIN, y: 30, w: CONTENT_W, h: 150 };
-const MAP_RECT_FULL: Rect = { x: MARGIN, y: 30, w: CONTENT_W, h: 210 };
 const TERYT_LIST_LIMIT = 4;
+export const TABLE_ROW_H = 7;
+const LAST_ROW_LIMIT_Y = PAGE_H - 22;
+const CONTINUATION_TITLE_Y = 32;
+const FIRST_TITLE_Y = 34;
 
 export interface PdfExportInput {
   readonly project: Project;
@@ -39,10 +34,7 @@ export function pageSections(plan: PdfPagePlan): PageSection[] {
   return (['map', 'rangesTable', 'fullTable'] as const).filter((key) => plan[key]);
 }
 
-export function buildParcelHeader(
-  project: Project,
-  parcels: readonly Parcel[],
-): string {
+export function buildParcelHeader(project: Project, parcels: readonly Parcel[]): string {
   if (parcels.length === 1 && project.teryt === parcels[0]?.teryt) {
     return `TERYT: ${project.teryt}`;
   }
@@ -65,48 +57,14 @@ export function buildParcelHeader(
 
 type OuterRing = LngLat[];
 
-type RingProjector = (lng: number, lat: number) => [number, number];
-
-function drawRingOutlines(doc: jsPDF, rings: readonly OuterRing[], project: RingProjector): void {
+function drawRingOutlines(doc: jsPDF, rings: readonly OuterRing[]): void {
   rings.forEach((ring) => {
     for (let i = 0; i < ring.length; i++) {
-      const a = project(ring[i][0], ring[i][1]);
+      const a = ring[i];
       const next = ring[(i + 1) % ring.length];
-      const b = project(next[0], next[1]);
-      doc.line(a[0], a[1], b[0], b[1]);
+      doc.line(a[0], a[1], next[0], next[1]);
     }
   });
-}
-
-function outerRingsOfGeometry(geometry: Parcel['geom']): OuterRing[] {
-  if (geometry.type === 'Polygon') {
-    return geometry.coordinates.slice(0, 1).map((ring) => ring.map(([lng, lat]) => [lng, lat] as LngLat));
-  }
-  return geometry.coordinates.map((polygon) =>
-    polygon.slice(0, 1).flatMap((ring) => ring.map(([lng, lat]) => [lng, lat] as LngLat)),
-  );
-}
-
-export function collectMapRings(input: PdfExportInput): readonly OuterRing[] {
-  if (input.aggregate !== null && input.aggregate !== undefined) {
-    if (input.aggregate.type === 'Polygon') {
-      const ring = input.aggregate.coordinates[0] as LngLat[];
-      return [ring.map(([lng, lat]) => [lng, lat] as LngLat)];
-    }
-    const polys = input.aggregate.coordinates as LngLat[][][];
-    return polys.flatMap((polygon) =>
-      polygon.slice(0, 1).map((ring) => ring.map(([lng, lat]) => [lng, lat] as LngLat)),
-    );
-  }
-  if (input.parcels !== undefined && input.parcels.length > 0) {
-    return input.parcels.flatMap((parcel) => outerRingsOfGeometry(parcel.geom));
-  }
-  const polygon = input.project.polygon;
-  if (polygon === undefined) {
-    return [];
-  }
-  const ring = polygonPoints(polygon);
-  return ring.length > 0 ? [ring] : [];
 }
 
 export function generatePdfReport(input: PdfExportInput): jsPDF {
@@ -146,16 +104,18 @@ function drawPage(
   drawPageHeader(doc, input.project.name, teryt, pageIndex, pageCount);
 
   const withMap = sections.includes('map');
+  let rangesEnd: RangesEnd | undefined;
   if (withMap) {
     drawMapSection(doc, prefs, sections.includes('rangesTable'), input);
   }
   if (sections.includes('rangesTable')) {
     const compact = withMap;
-    drawRangesSection(doc, input, compact);
+    rangesEnd = drawRangesSection(doc, input, compact);
   }
 
   if (sections.includes('fullTable')) {
-    drawNumberedSection(doc, input.project.name, teryt, input.trees);
+    const startY = rangesEnd !== undefined ? rangesEnd.endY + 8 : FIRST_TITLE_Y;
+    drawNumberedSection(doc, input.project.name, teryt, input.trees, startY);
   }
 
   drawFooter(doc, generatedAt, summary);
@@ -180,7 +140,11 @@ function drawPageHeader(
   doc.text(teryt, PAGE_W - MARGIN - 2, MARGIN + 8, { align: 'right' });
   doc.setFontSize(8);
   doc.setFont('bold');
-  doc.text(`Strona ${String(pageIndex)}/${String(pageCount)}`, MARGIN + 2, MARGIN + 18);
+  const pageLabel =
+    pageCount > 0
+      ? `Strona ${String(pageIndex)}/${String(pageCount)}`
+      : `Strona ${String(pageIndex)}`;
+  doc.text(pageLabel, MARGIN + 2, MARGIN + 18);
   doc.setFont('normal');
   doc.setTextColor('#6b7280');
   doc.setFontSize(9);
@@ -192,13 +156,13 @@ function drawMapSection(
   compact: boolean,
   input: PdfExportInput,
 ): void {
-  const rect = compact ? MAP_RECT : MAP_RECT_FULL;
+  const rect = compact ? MAP_RECT_COMPACT : MAP_RECT_FULL;
   doc.setDrawColor('#166534');
   doc.setLineWidth(0.4);
   doc.rect(rect.x, rect.y, rect.w, rect.h, 'S');
 
-  const rings = collectMapRings(input);
-  if (rings.length === 0) {
+  const layout = computeMapLayout(input, compact);
+  if (layout === null) {
     doc.setFontSize(10);
     doc.setTextColor('#6b7280');
     doc.text('Brak działki w projekcie', rect.x + rect.w / 2, rect.y + rect.h / 2, {
@@ -207,50 +171,45 @@ function drawMapSection(
     return;
   }
 
-  const allPoints = rings.flat();
-  const rotationDeg = prefs.autoRotate ? chooseRotation(allPoints) : 0;
-  const bbox = bboxOf(allPoints);
-  const cx = (bbox.minX + bbox.maxX) / 2;
-  const cy = (bbox.minY + bbox.maxY) / 2;
-  const project = makeProjector(rotatePoints(allPoints, rotationDeg, cx, cy), rect);
-
   const single = input.parcels === undefined || input.parcels.length <= 1;
 
   if (single) {
     doc.setDrawColor('#15803d');
     doc.setLineWidth(0.5);
-    drawRingOutlines(doc, rings, project);
+    drawRingOutlines(doc, layout.rings);
   } else {
     doc.setFillColor('#166534');
-    for (const ring of rings) {
+    for (const ring of layout.rings) {
       if (ring.length < 2) {
         continue;
       }
-      const path = ring.map((point) => project(point[0], point[1]));
-      const start = path[0];
+      const start = ring[0];
       const deltas: [number, number][] = [];
-      for (let i = 0; i < path.length; i++) {
-        const delta = path[(i + 1) % path.length];
-        const current = path[i];
+      for (let i = 0; i < ring.length; i++) {
+        const delta = ring[(i + 1) % ring.length];
+        const current = ring[i];
         deltas.push([delta[0] - current[0], delta[1] - current[1]]);
       }
       doc.lines(deltas, start[0], start[1], [1, 1], 'F', true);
     }
     doc.setDrawColor('#1e3a8a');
     doc.setLineWidth(0.5);
-    drawRingOutlines(doc, rings, project);
+    drawRingOutlines(doc, layout.rings);
   }
 
   doc.setTextColor('#111827');
   doc.setFontSize(6);
-  input.trees.forEach((tree, index) => {
-    const rotated = rotatePoints([[tree.lng, tree.lat]], rotationDeg, cx, cy)[0];
-    const [x, y] = project(rotated[0], rotated[1]);
-    const radius = markerSizeForCm(tree.circumference, prefs.markerScale) / 2;
-    doc.setFillColor(getSpeciesColor(tree.species));
-    doc.circle(x, y, radius, 'F');
-    if (prefs.showNumberedTable) {
-      doc.text(String(index + 1), x + radius + 1.4, y - radius - 0.8);
+  layout.markers.forEach((marker) => {
+    doc.setFillColor(marker.color);
+    doc.circle(marker.x, marker.y, marker.r, 'F');
+    if (marker.label !== undefined) {
+      const labelLeft = marker.x > rect.x + rect.w - 14;
+      const labelX = labelLeft ? marker.x - marker.r - 1.4 : marker.x + marker.r + 1.4;
+      if (labelLeft) {
+        doc.text(marker.label, labelX, marker.y - marker.r - 0.8, { align: 'right' });
+      } else {
+        doc.text(marker.label, labelX, marker.y - marker.r - 0.8);
+      }
     }
   });
 
@@ -262,7 +221,7 @@ function drawMapSection(
     doc.setFont('normal');
   }
 
-  drawCompass(doc, rect.x + rect.w - 10, rect.y + 10, 5, rotationDeg, prefs.autoRotate);
+  drawCompass(doc, rect.x + rect.w - 10, rect.y + 10, 5, layout.rotationDeg, prefs.autoRotate);
 }
 
 function drawCompass(
@@ -289,13 +248,18 @@ function drawCompass(
   doc.text('Północ prawdziwa', needle.labelX, needle.labelY + 4, { align: 'center' });
 }
 
-function drawRangesSection(doc: jsPDF, input: PdfExportInput, compact: boolean): void {
+interface RangesEnd {
+  endY: number;
+  endPage: number;
+}
+
+function drawRangesSection(doc: jsPDF, input: PdfExportInput, compact: boolean): RangesEnd {
   const table = buildRangesTable(
     input.trees,
     input.project.speciesConfig,
     input.project.rangesConfig,
   );
-  const titleY = compact ? MAP_RECT.y + MAP_RECT.h + 10 : 34;
+  const titleY = compact ? MAP_RECT_COMPACT.y + MAP_RECT_COMPACT.h + 10 : FIRST_TITLE_Y;
   doc.setFontSize(12);
   doc.setTextColor('#111827');
   doc.setFont('bold');
@@ -306,19 +270,34 @@ function drawRangesSection(doc: jsPDF, input: PdfExportInput, compact: boolean):
   const speciesWidth = 40;
   const totalsWidth = 18;
   const rangeWidth = (CONTENT_W - speciesWidth - totalsWidth) / Math.max(1, columnCount - 1);
-  const widths = [speciesWidth, ...Array.from({ length: columnCount - 1 }, () => rangeWidth), totalsWidth];
+  const widths = [
+    speciesWidth,
+    ...Array.from({ length: columnCount - 1 }, () => rangeWidth),
+    totalsWidth,
+  ];
 
   const header = ['Gatunek', ...table.columns];
-  const rows = table.rows.map((row) => [
-    row.species,
-    ...row.counts.map(String),
-    String(row.total),
-  ]);
+  const rows = table.rows.map((row) => [row.species, ...row.counts.map(String), String(row.total)]);
 
-  drawRow(doc, header, titleY + 4, widths, true);
-  rows.forEach((row, index) => {
-    drawRow(doc, row, titleY + 4 + 7 * (index + 1), widths, false);
-  });
+  let y = titleY + 4;
+  drawRow(doc, header, y, widths, true);
+  y += TABLE_ROW_H;
+  for (const row of rows) {
+    if (y + TABLE_ROW_H > LAST_ROW_LIMIT_Y) {
+      doc.addPage();
+      doc.setFontSize(10);
+      doc.setFont('bold');
+      doc.setTextColor('#111827');
+      doc.text('Tabela zbiorcza — cd.', MARGIN, CONTINUATION_TITLE_Y);
+      doc.setFont('normal');
+      y = CONTINUATION_TITLE_Y + 4;
+      drawRow(doc, header, y, widths, true);
+      y += TABLE_ROW_H;
+    }
+    drawRow(doc, row, y, widths, false);
+    y += TABLE_ROW_H;
+  }
+  return { endY: y, endPage: doc.getNumberOfPages() };
 }
 
 function drawNumberedSection(
@@ -326,32 +305,48 @@ function drawNumberedSection(
   projectName: string,
   teryt: string,
   trees: readonly Tree[],
+  startY: number = FIRST_TITLE_Y,
 ): void {
-  let lastPageDrawn = doc.getNumberOfPages();
-  doc.setPage(lastPageDrawn);
-
-  doc.setFontSize(12);
-  doc.setTextColor('#111827');
-  doc.setFont('bold');
-  doc.text('Pełna lista drzew', MARGIN, 34);
-  doc.setFont('normal');
-
   const header = ['Nr', 'Gatunek', 'Obwód (cm)', 'Lokalizacja'];
   const widths = [10, 45, 25, CONTENT_W - 80];
   const rows = buildNumberedRows(trees);
+  const needsFirstPage = startY + 4 + TABLE_ROW_H > LAST_ROW_LIMIT_Y;
+  if (needsFirstPage) {
+    doc.addPage();
+    doc.setPage(doc.getNumberOfPages());
+    drawContinuationPageHeader(doc, projectName, teryt, doc.getNumberOfPages());
+    startY = CONTINUATION_TITLE_Y;
+  } else {
+    doc.setPage(doc.getNumberOfPages());
+  }
 
-  let y = 38;
-  drawRow(doc, header, y, widths, true);
-  y += 7;
-  doc.setFontSize(9);
+  let title = 'Pełna lista drzew';
+  let y = startY;
+  let headerDrawnForPage = false;
   for (const row of rows) {
-    if (y > PAGE_H - 20) {
-      doc.addPage();
-      lastPageDrawn = doc.getNumberOfPages();
-      drawPageHeader(doc, `${projectName} — pełna lista drzew (cd.)`, teryt, lastPageDrawn, lastPageDrawn);      y = 34;
+    if (!headerDrawnForPage) {
+      doc.setFontSize(12);
+      doc.setTextColor('#111827');
+      doc.setFont('bold');
+      doc.text(title, MARGIN, y);
+      doc.setFont('normal');
+      drawRow(doc, header, y + 4, widths, true);
+      y += 4 + TABLE_ROW_H;
+      headerDrawnForPage = true;
       doc.setFontSize(9);
-      drawRow(doc, header, y, widths, true);
-      y += 7;
+    }
+    if (y + TABLE_ROW_H > LAST_ROW_LIMIT_Y) {
+      doc.addPage();
+      const page = doc.getNumberOfPages();
+      drawContinuationPageHeader(doc, `${projectName} — pełna lista drzew`, teryt, page);
+      title = 'Pełna lista drzew — cd.';
+      y = CONTINUATION_TITLE_Y;
+      doc.setFont('bold');
+      doc.text(title, MARGIN, y);
+      doc.setFont('normal');
+      drawRow(doc, header, y + 4, widths, true);
+      y += 4 + TABLE_ROW_H;
+      doc.setFontSize(9);
     }
     drawRow(
       doc,
@@ -360,8 +355,17 @@ function drawNumberedSection(
       widths,
       false,
     );
-    y += 7;
+    y += TABLE_ROW_H;
   }
+}
+
+function drawContinuationPageHeader(
+  doc: jsPDF,
+  projectName: string,
+  teryt: string,
+  page: number,
+): void {
+  drawPageHeader(doc, projectName, teryt, page, 0);
 }
 
 function drawRow(

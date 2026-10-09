@@ -13,7 +13,7 @@ export function compassNeedle(
   radius: number,
   rotationDeg: number,
 ): CompassNeedle {
-  const rad = ((rotationDeg - 90) * Math.PI) / 180;
+  const rad = ((-rotationDeg - 90) * Math.PI) / 180;
   const nx = centerX + radius * Math.cos(rad);
   const ny = centerY + radius * Math.sin(rad);
   const sx = centerX - radius * Math.cos(rad);

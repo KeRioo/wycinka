@@ -11,8 +11,14 @@ describe('compassNeedle', () => {
 
   it('should point east when rotated 90 degrees', () => {
     const needle = compassNeedle(50, 50, 20, 90);
-    expect(needle.northX).toBeCloseTo(70, 10);
+    expect(needle.northX).toBeCloseTo(30, 10);
     expect(needle.northY).toBeCloseTo(50, 10);
+  });
+
+  it('should point north-west when rotated 45 degrees', () => {
+    const needle = compassNeedle(50, 50, 20, 45);
+    expect(needle.northX).toBeLessThan(50);
+    expect(needle.northY).toBeLessThan(50);
   });
 
   it('should place the N label outside the needle tip', () => {

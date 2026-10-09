@@ -257,7 +257,17 @@ describe('project parcels (schema v3)', () => {
     region_name: 'Obręb 0001',
     area_m2: 1234.56,
     land_use: 'Ls',
-    geom: { type: 'Polygon', coordinates: [[[21.006, 52.231], [21.007, 52.231], [21.007, 52.232], [21.006, 52.231]]] },
+    geom: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [21.006, 52.231],
+          [21.007, 52.231],
+          [21.007, 52.232],
+          [21.006, 52.231],
+        ],
+      ],
+    },
     bbox: [21.006, 52.231, 21.007, 52.232],
     centroid: [21.0065, 52.2315],
     fetched_at: '2026-09-29T03:00:00Z',
@@ -268,7 +278,12 @@ describe('project parcels (schema v3)', () => {
   };
 
   function makeParcel(teryt: string): Parcel {
-    return { ...BASE_PARCEL, id: teryt, teryt, centroid: [BASE_PARCEL.centroid[0], BASE_PARCEL.centroid[1]] };
+    return {
+      ...BASE_PARCEL,
+      id: teryt,
+      teryt,
+      centroid: [BASE_PARCEL.centroid[0], BASE_PARCEL.centroid[1]],
+    };
   }
 
   beforeEach(async () => {

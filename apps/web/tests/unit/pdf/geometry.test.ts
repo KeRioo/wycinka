@@ -4,8 +4,10 @@ import {
   bboxOf,
   chooseRotation,
   makeProjector,
+  midLatOf,
   polygonPoints,
   rotatePoints,
+  toKm,
 } from '@/lib/pdf/geometry';
 
 const SQUARE: PolygonGeometry = {
@@ -114,4 +116,45 @@ describe('makeProjector', () => {
     const north = project(5, 10);
     const mid = project(5, 5);
     expect(north[1]).toBeLessThan(mid[1]);
-  });});
+  });
+});
+
+describe('toKm', () => {
+  it('test_toKm_when_projected_then_longitude_span_shrinks_by_cos_lat', () => {
+    const points: [number, number][] = [
+      [21.0, 52.0],
+      [21.1, 52.0],
+      [21.1, 52.1],
+    ];
+    const lat0 = midLatOf(points);
+    expect(lat0).toBeCloseTo(52.05, 6);
+    const km = toKm(points, lat0);
+    const spanLngKm = km[1][0] - km[0][0];
+    expect(spanLngKm).toBeCloseTo(0.1 * 111.32 * Math.cos((52.05 * Math.PI) / 180), 5);
+  });
+
+  it('test_toKm_when_same_degree_span_then_latitude_km_larger_than_longitude_km', () => {
+    const pts: [number, number][] = [
+      [21.0, 52.0],
+      [21.1, 52.0],
+      [21.0, 52.1],
+      [21.1, 52.05],
+    ];
+    const lat0 = midLatOf(pts);
+    const km = toKm(pts, lat0);
+    const spanLngKm = Math.max(...km.map((p) => p[0])) - Math.min(...km.map((p) => p[0]));
+    const spanLatKm = Math.max(...km.map((p) => p[1])) - Math.min(...km.map((p) => p[1]));
+    expect(spanLatKm).toBeGreaterThan(spanLngKm);
+  });
+
+  it('test_chooseRotation_when_km_points_then_finds_minimal_bbox', () => {
+    const points: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 0.5],
+      [0, 0.5],
+    ];
+    const angle = chooseRotation(toKm(points, 52));
+    expect(angle).toBe(0);
+  });
+});

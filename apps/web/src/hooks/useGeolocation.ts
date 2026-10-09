@@ -61,7 +61,9 @@ interface WindowWithOptionalGeolocation {
   };
 }
 
-export function useGeolocation(options: UseGeolocationOptions = DEFAULT_OPTIONS): UseGeolocationResult {
+export function useGeolocation(
+  options: UseGeolocationOptions = DEFAULT_OPTIONS,
+): UseGeolocationResult {
   const {
     enableHighAccuracy = true,
     watch = false,

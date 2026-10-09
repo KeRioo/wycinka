@@ -63,7 +63,9 @@ describe('usePMTiles', () => {
 
 describe('pmtilesUrl', () => {
   it('should prefix URL with protocol', () => {
-    expect(pmtilesUrl('https://example.com/data.pmtiles')).toBe('pmtiles://https://example.com/data.pmtiles');
+    expect(pmtilesUrl('https://example.com/data.pmtiles')).toBe(
+      'pmtiles://https://example.com/data.pmtiles',
+    );
   });
 
   it('should support custom protocol key', () => {

@@ -6,6 +6,7 @@ import { generatePdfReport, pdfFileName } from '@/lib/pdf/pdfReport';
 import { api } from '@/services/api';
 import type { Parcel, ParcelAggregateResponse } from '@/services/api.types';
 import { useProjectStore } from '@/stores/projectStore';
+import PdfMapPreview from './PdfMapPreview';
 import Compass from './Compass';
 
 const LAYOUT_OPTIONS: readonly { value: PdfPrefs['layout']; label: string; hint: string }[] = [
@@ -128,7 +129,9 @@ export default function PdfExportDialog({
                       className="mt-1"
                     />
                     <span>
-                      <span className="block text-sm font-medium text-forest-900">{option.label}</span>
+                      <span className="block text-sm font-medium text-forest-900">
+                        {option.label}
+                      </span>
                       <span className="block text-xs text-stone-500">{option.hint}</span>
                     </span>
                   </label>
@@ -170,6 +173,11 @@ export default function PdfExportDialog({
                 />
                 Automatyczny obrót mapy
               </label>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-stone-700">Podgląd układu (strona 1)</p>
+                <PdfMapPreview project={project} trees={trees} parcels={parcels} prefs={prefs} />
+              </div>
 
               <div className="flex items-center justify-between rounded border border-stone-200 bg-stone-50 p-3">
                 <p className="text-xs text-stone-500">

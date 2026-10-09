@@ -11,7 +11,12 @@ interface TreePopupProps {
   onClose?: () => void;
 }
 
-export default function TreePopup({ tree, onEdit, onDelete, onClose }: TreePopupProps): JSX.Element {
+export default function TreePopup({
+  tree,
+  onEdit,
+  onDelete,
+  onClose,
+}: TreePopupProps): JSX.Element {
   return (
     <div data-testid="tree-popup" className="min-w-[240px] space-y-2 text-sm text-forest-900">
       <header className="flex items-start justify-between gap-2">
@@ -46,12 +51,7 @@ export default function TreePopup({ tree, onEdit, onDelete, onClose }: TreePopup
         )}
       </header>
       <div className="flex items-center justify-end gap-2 border-t border-stone-200 pt-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          data-testid="tree-popup-edit"
-          onClick={onEdit}
-        >
+        <Button size="sm" variant="secondary" data-testid="tree-popup-edit" onClick={onEdit}>
           <PencilLine aria-hidden="true" className="h-4 w-4" />
           Edytuj
         </Button>

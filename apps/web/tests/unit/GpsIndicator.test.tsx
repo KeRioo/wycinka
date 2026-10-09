@@ -21,22 +21,14 @@ describe('GpsIndicator', () => {
 
   it('should show medium badge when accuracy is 10-30 m', () => {
     render(
-      <GpsIndicator
-        position={{ lat: 52, lng: 21, accuracy: 20 }}
-        loading={false}
-        error={null}
-      />,
+      <GpsIndicator position={{ lat: 52, lng: 21, accuracy: 20 }} loading={false} error={null} />,
     );
     expect(screen.getByTestId('gps-accuracy-badge')).toHaveTextContent('średnia');
   });
 
   it('should show poor badge when accuracy > 30 m', () => {
     render(
-      <GpsIndicator
-        position={{ lat: 52, lng: 21, accuracy: 100 }}
-        loading={false}
-        error={null}
-      />,
+      <GpsIndicator position={{ lat: 52, lng: 21, accuracy: 100 }} loading={false} error={null} />,
     );
     expect(screen.getByTestId('gps-accuracy-badge')).toHaveTextContent('słaba');
   });
@@ -70,11 +62,7 @@ describe('GpsIndicator', () => {
 
   it('should not render refresh button when no onRefresh prop', () => {
     render(
-      <GpsIndicator
-        position={{ lat: 52, lng: 21, accuracy: 8 }}
-        loading={false}
-        error={null}
-      />,
+      <GpsIndicator position={{ lat: 52, lng: 21, accuracy: 8 }} loading={false} error={null} />,
     );
     expect(screen.queryByRole('button', { name: /Odśwież GPS/i })).not.toBeInTheDocument();
   });

@@ -48,7 +48,8 @@ async function buildApiError(error: unknown): Promise<ApiError> {
   if (error instanceof HTTPError) {
     const { response } = error;
     const body = await readJsonBody(response);
-    const code: ApiErrorCode = (body?.code as ApiErrorCode | undefined) ?? mapStatusToCode(response.status);
+    const code: ApiErrorCode =
+      (body?.code as ApiErrorCode | undefined) ?? mapStatusToCode(response.status);
     const fallbackMessage = response.statusText || `HTTP ${String(response.status)}`;
     const message = body?.error ?? fallbackMessage;
     const details = body?.details;
@@ -141,7 +142,11 @@ export const api = {
       throw new ApiError('BAD_REQUEST', 'Zapytanie wyszukiwarki jest puste', 400);
     }
     if (trimmed.length > 256) {
-      throw new ApiError('BAD_REQUEST', 'Zapytanie wyszukiwarki jest za długie (max 256 znaków)', 400);
+      throw new ApiError(
+        'BAD_REQUEST',
+        'Zapytanie wyszukiwarki jest za długie (max 256 znaków)',
+        400,
+      );
     }
     const safeLimit = Math.min(Math.max(1, limit), MAX_SEARCH_RESULTS);
     try {

@@ -2,9 +2,7 @@ import { formatArea, formatCoordinate } from '@/lib/utils';
 import type { Parcel } from '@/services/api.types';
 
 export type ParcelPopupAction =
-  | { kind: 'add'; disabled: boolean }
-  | { kind: 'remove' }
-  | { kind: 'none' };
+  { kind: 'add'; disabled: boolean } | { kind: 'remove' } | { kind: 'none' };
 
 interface ParcelPopupProps {
   parcel: Parcel;
@@ -54,7 +52,6 @@ export default function ParcelPopup({
         {action.kind === 'none' && null}
       </div>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
-
         <dt className="font-medium text-stone-600">Woj.:</dt>
         <dd>{parcel.voivodeship}</dd>
         <dt className="font-medium text-stone-600">Powiat:</dt>
@@ -78,7 +75,9 @@ export default function ParcelPopup({
         <dt className="font-medium text-stone-600">Źródło:</dt>
         <dd className="text-xs">{parcel.datasource}</dd>
         <dt className="font-medium text-stone-600">Centroid:</dt>
-        <dd className="font-mono text-xs">{formatCoordinate(parcel.centroid[1], parcel.centroid[0])}</dd>
+        <dd className="font-mono text-xs">
+          {formatCoordinate(parcel.centroid[1], parcel.centroid[0])}
+        </dd>
       </dl>
     </div>
   );
