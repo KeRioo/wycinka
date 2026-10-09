@@ -530,3 +530,45 @@ do 1 m zgodnie z logiem; (3) dodatkowo klik na mapie w placing/editing przenosi 
 snapem (drag ma być dotykający, natomiast klik to nóżna oczekiwana UX-moving).
 
 **Uwaga dla innych:** MapClickHandler w placing/editing nie robi lookup działki (celowo).
+
+---
+
+## Frontend (subagent: frontend)
+
+Branch: `feat/multi-parcel-project` (worktree /root/wt-multi-parcel)
+
+### Multi-parcel per projekt (zakończone)
+
+- [x] Dexie schema **v3**: tabela `project_parcels` (id, projectId, teryt,
+      snapshot Parcel, addedAt); CURRENT_VERSION=3; dedupe po teryt,
+      limit 20 działek/projekt; deleteProject kasuje parcel-e (cascade)
+- [x] projectStore: `addParcelToProject(parcel, projectId?)`,
+      `removeParcelFromProject(teryt)`, `projectParcels`, `isParcelInProject`,
+      `loadProjectParcels`, setToast (toast limitu "Limit 20 działek na projekt")
+- [x] ParcelPopup: akcja `add` („➕ Dodaj do projektu") / `remove`
+      („Usuń z projektu" gdy działka już w projekcie) — dodawanie ręczne przez przycisk
+- [x] Mapa: source `parcels` w MapView — wszystkie działki projektu wypełnione
+      forest alpha 0.15, border granatowy; wybrana działka nadal żółty highlight
+- [x] ProjectsPage: panel aktywnego projektu — liczba działek + chipsy TERYT
+      z przyciskiem usuń (remove)
+- [x] PDF: przy >1 działce PdfExportDialog pobiera
+      `GET /api/v1/parcel/aggregate` (ky już miał aggregateParcels) i przekazuje
+      geometrię do pdfReport: rysuje WSZYSTKIE zewnętrzne pierścienie
+      (wypełnienie forest + border navy), label „N działki", nagłówek
+      „Działki: N (lista TERYT …)", bbpo projection po wszystkich poligonach.
+      Fallback: gdy aggregate padnie → geometry per-działka. Single → bez zmian.
+- [x] Drzewa spójne: PDF numeruje/projektuje drzewa wg bbox wszystkich działek
+- [x] Fix: `handleCreateProject` przez `ensureActiveProject()` — eliminuje race
+      "stale loadProjects nadpisuje świeżo utworzony projekt" (występował w e2e)
+- [x] E2E `tests/e2e/multi-parcel.spec.ts` (mockify /parcel, /parcel/aggregate)
+
+### Gates
+- typecheck OK, lint OK (max-warnings=0), 413 unit/integration testów OK,
+  coverage 92.7% global / 89.1% branch, build OK, e2e 22/22 OK
+  (3 pełne przebiegi bez faili; lokalnie workers=2, retries=1)
+
+### Uwagi
+- Fixture `tests/e2e/fixtures/minimal.pmtiles` jest gitignored (*.pmtiles) —
+  wygenerowany lokalnie z minimalnego syntetycznego archiwum PMTiles v3
+  (header + pusty root dir + '{}' metadata).
+- Także hardening e2e w trees/arrowpad-hold/snap-vertex (retry czekania na FAB).
