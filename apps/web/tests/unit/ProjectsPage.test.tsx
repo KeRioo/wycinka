@@ -88,6 +88,11 @@ describe('ProjectsPage', () => {
     });
     await user.click(screen.getByTestId('new-project'));
     await waitFor(() => {
+      expect(screen.getByTestId('create-dialog')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('create-name-input')).toHaveValue('Mój pierwszy projekt');
+    await user.click(screen.getByTestId('create-save'));
+    await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/map');
     });
     expect(useProjectStore.getState().projects.length).toBeGreaterThan(0);
@@ -194,6 +199,110 @@ describe('ProjectsPage', () => {
       expect(screen.queryByTestId('parcel-chip-141201_1.0001.6501')).not.toBeInTheDocument();
     });
     expect(screen.getByTestId('project-parcel-count')).toHaveTextContent('Działki: 1');
+  });
+
+  it('should create project with custom name from dialog', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <ProjectsPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('new-project')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('new-project'));
+    await user.clear(screen.getByTestId('create-name-input'));
+    await user.type(screen.getByTestId('create-name-input'), 'Mój las 2026');
+    await user.click(screen.getByTestId('create-save'));
+    await waitFor(() => {
+      expect(useProjectStore.getState().projects[0]?.name).toBe('Mój las 2026');
+    });
+    expect(mockNavigate).toHaveBeenCalledWith('/map');
+  });
+
+  it('should show create error for empty name', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <ProjectsPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('new-project')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('new-project'));
+    await user.clear(screen.getByTestId('create-name-input'));
+    await user.click(screen.getByTestId('create-save'));
+    await waitFor(() => {
+      expect(screen.getByTestId('create-error')).toBeInTheDocument();
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('should cancel rename dialog and keep original name', async () => {
+    const user = userEvent.setup();
+    const project = await useProjectStore.getState().createAndActivate('Stara nazwa');
+    render(
+      <MemoryRouter>
+        <ProjectsPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('Stara nazwa')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('project-rename'));
+    await user.clear(screen.getByTestId('rename-input'));
+    await user.type(screen.getByTestId('rename-input'), 'Nowa nazwa');
+    await user.click(screen.getByTestId('rename-cancel'));
+    expect(screen.queryByTestId('rename-dialog')).not.toBeInTheDocument();
+    const stored = await useProjectStore.getState().projects.find((p) => p.id === project.id);
+    expect(stored?.name).toBe('Stara nazwa');
+  });
+
+  it('should persist renamed project on save', async () => {
+    const user = userEvent.setup();
+    const project = await useProjectStore.getState().createAndActivate('Stara nazwa');
+    render(
+      <MemoryRouter>
+        <ProjectsPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('Stara nazwa')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('project-rename'));
+    await user.clear(screen.getByTestId('rename-input'));
+    await user.type(screen.getByTestId('rename-input'), 'Nowa nazwa');
+    await user.click(screen.getByTestId('rename-save'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('rename-dialog')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Nowa nazwa')).toBeInTheDocument();
+    const stored = await useProjectStore.getState().projects.find((p) => p.id === project.id);
+    expect(stored?.name).toBe('Nowa nazwa');
+  });
+
+  it('should show rename error for invalid name and not persist', async () => {
+    const user = userEvent.setup();
+    const project = await useProjectStore.getState().createAndActivate('Stara nazwa');
+    render(
+      <MemoryRouter>
+        <ProjectsPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('Stara nazwa')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('project-rename'));
+    await user.clear(screen.getByTestId('rename-input'));
+    await user.click(screen.getByTestId('rename-save'));
+    await waitFor(() => {
+      expect(screen.getByTestId('rename-error')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('rename-dialog')).toBeInTheDocument();
+    const stored = await useProjectStore.getState().projects.find((p) => p.id === project.id);
+    expect(stored?.name).toBe('Stara nazwa');
   });
 
   it('should show empty message when active project has no parcels', async () => {

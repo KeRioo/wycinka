@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FolderPlus, Map as MapIcon, Trash2, X } from 'lucide-react';
+import { FolderPlus, Map as MapIcon, Pencil, Trash2, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { useProjectStore } from '@/stores/projectStore';
 import type { Project } from '@/db/schema';
@@ -19,23 +19,35 @@ interface ProjectRowProps {
   project: Project;
   onSelect: () => void;
   onDelete: () => void;
+  onRename: () => void;
 }
 
-function ProjectRow({ project, onSelect, onDelete }: ProjectRowProps): JSX.Element {
+function ProjectRow({ project, onSelect, onDelete, onRename }: ProjectRowProps): JSX.Element {
   return (
     <Card data-testid="project-card" className="transition-colors hover:border-forest-300">
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2 text-base">
           <span>{project.name}</span>
-          <button
-            type="button"
-            aria-label={`Usuń projekt ${project.name}`}
-            data-testid="project-delete"
-            onClick={onDelete}
-            className="rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-700"
-          >
-            <Trash2 aria-hidden="true" className="h-4 w-4" />
-          </button>
+          <span className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={`Edytuj nazwę projektu ${project.name}`}
+              data-testid="project-rename"
+              onClick={onRename}
+              className="flex h-11 w-11 items-center justify-center rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-forest-700"
+            >
+              <Pencil aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Usuń projekt ${project.name}`}
+              data-testid="project-delete"
+              onClick={onDelete}
+              className="flex h-11 w-11 items-center justify-center rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-700"
+            >
+              <Trash2 aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -68,9 +80,16 @@ export default function ProjectsPage(): JSX.Element {
   const projectParcels = useProjectStore((s) => s.projectParcels);
   const loadProjectParcels = useProjectStore((s) => s.loadProjectParcels);
   const removeParcelFromProject = useProjectStore((s) => s.removeParcelFromProject);
+  const renameProject = useProjectStore((s) => s.renameProject);
   const navigate = useNavigate();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [creating, setCreating] = useState<boolean>(false);
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameName, setRenameName] = useState<string>('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState<boolean>(false);
+  const [createName, setCreateName] = useState<string>('Mój pierwszy projekt');
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadProjects();
@@ -81,13 +100,38 @@ export default function ProjectsPage(): JSX.Element {
   }, [activeProjectId, loadProjectParcels]);
 
   const handleCreate = async (): Promise<void> => {
+    const name = createName.trim();
+    if (name.length < 1 || name.length > 100) {
+      setCreateError('Nazwa projektu musi mieć od 1 do 100 znaków');
+      return;
+    }
     setCreating(true);
     try {
-      await createAndActivate(`Projekt ${String(projects.length + 1)}`);
+      await createAndActivate(name);
       navigate('/map');
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleRenameOpen = (project: Project): void => {
+    setRenameId(project.id);
+    setRenameName(project.name);
+    setRenameError(null);
+  };
+
+  const handleRenameSave = async (): Promise<void> => {
+    if (renameId === null) {
+      return;
+    }
+    const ok = await renameProject(renameId, renameName);
+    if (!ok) {
+      setRenameError(
+        useProjectStore.getState().toast ?? 'Nazwa projektu musi mieć od 1 do 100 znaków',
+      );
+      return;
+    }
+    setRenameId(null);
   };
 
   const handleSelect = (id: string): void => {
@@ -116,9 +160,10 @@ export default function ProjectsPage(): JSX.Element {
           <Button
             data-testid="new-project"
             onClick={() => {
-              void handleCreate();
+              setCreateName('Mój pierwszy projekt');
+              setCreateError(null);
+              setCreateOpen(true);
             }}
-            disabled={creating}
           >
             <FolderPlus aria-hidden="true" className="mr-2 h-5 w-5" />
             + Nowy projekt
@@ -190,6 +235,9 @@ export default function ProjectsPage(): JSX.Element {
                 onDelete={() => {
                   setConfirmDeleteId(project.id);
                 }}
+                onRename={() => {
+                  handleRenameOpen(project);
+                }}
               />
             </div>
           ))}
@@ -237,6 +285,126 @@ export default function ProjectsPage(): JSX.Element {
                   }}
                 >
                   Usuń
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {renameId !== null && (
+        <div
+          role="dialog"
+          aria-label="Edytuj nazwę projektu"
+          data-testid="rename-dialog"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+        >
+          <Card className="w-full max-w-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Edytuj nazwę projektu</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <input
+                data-testid="rename-input"
+                type="text"
+                value={renameName}
+                maxLength={100}
+                onChange={(e) => {
+                  setRenameName(e.target.value);
+                  setRenameError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    void handleRenameSave();
+                  }
+                }}
+                className="h-11 w-full rounded-md border border-stone-300 px-3 text-sm focus:border-forest-500 focus:outline-none"
+                aria-label="Nazwa projektu"
+              />
+              {renameError !== null && (
+                <p data-testid="rename-error" role="alert" className="text-sm text-red-700">
+                  {renameError}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  data-testid="rename-cancel"
+                  onClick={() => {
+                    setRenameId(null);
+                  }}
+                >
+                  Anuluj
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  data-testid="rename-save"
+                  onClick={() => {
+                    void handleRenameSave();
+                  }}
+                >
+                  Zapisz
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {createOpen && (
+        <div
+          role="dialog"
+          aria-label="Nowy projekt"
+          data-testid="create-dialog"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+        >
+          <Card className="w-full max-w-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Nowy projekt</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <label className="block space-y-1">
+                <span className="text-sm text-stone-600">Nazwa</span>
+                <input
+                  data-testid="create-name-input"
+                  type="text"
+                  value={createName}
+                  maxLength={100}
+                  onChange={(e) => {
+                    setCreateName(e.target.value);
+                    setCreateError(null);
+                  }}
+                  className="h-11 w-full rounded-md border border-stone-300 px-3 text-sm focus:border-forest-500 focus:outline-none"
+                />
+              </label>
+              {createError !== null && (
+                <p data-testid="create-error" role="alert" className="text-sm text-red-700">
+                  {createError}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  data-testid="create-cancel"
+                  onClick={() => {
+                    setCreateOpen(false);
+                  }}
+                >
+                  Anuluj
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  data-testid="create-save"
+                  disabled={creating}
+                  onClick={() => {
+                    void handleCreate();
+                  }}
+                >
+                  Utwórz
                 </Button>
               </div>
             </CardContent>
