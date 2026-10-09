@@ -15,6 +15,9 @@ class DownloadSettings(BaseSettings):
     max_retries: int = 3
     backoff_base_seconds: float = 1.0
     backoff_max_seconds: float = 60.0
+    page_size: int = 5000
+    max_parcels: int = 500_000
+    max_result_bytes: int = 6_000_000_000
 
     model_config = SettingsConfigDict(env_prefix="EGIB_DOWNLOAD__")
 
@@ -38,6 +41,11 @@ class SqliteSettings(BaseSettings):
 
 
 class SourcesSettings(BaseSettings):
+    wfs_url: str = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/EGIB/WFS/UslugaZbiorcza"
+    wfs_layer: str = "ms:dzialki"
+    wfs_page_size: int = 5000
+    raw_bytes_budget: int = 4_000_000_000
+    use_wfs: bool = False
     powiat_list_url: str = (
         "https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow"
     )

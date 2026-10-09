@@ -25,12 +25,33 @@ class TippecanoeError(RuntimeError):
 
     def __init__(self, returncode: int, stderr: str, command: list[str]) -> None:
         cmd_str = " ".join(command)
-        super().__init__(
-            f"tippecanoe failed (exit {returncode}): {stderr.strip() or cmd_str}"
-        )
+        super().__init__(f"tippecanoe failed (exit {returncode}): {stderr.strip() or cmd_str}")
         self.returncode = returncode
         self.stderr = stderr
         self.command = command
+
+
+def _gpkg_to_geojsonl(input_gpkg: Path, output: Path) -> Path:
+    """Convert a GeoPackage to line-delimited GeoJSON (WGS 84 required by tippecanoe)."""
+    import geopandas as gpd
+    import pyogrio
+
+    gdf = gpd.read_file(str(input_gpkg))
+    crs = gdf.crs.to_epsg() if gdf.crs is not None else None
+    if crs is not None and crs != 4326:
+        gdf = gdf.to_crs("EPSG:4326")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.exists():
+        output.unlink()
+    pyogrio.write_dataframe(gdf, str(output), driver="GeoJSONSeq")
+    logger.info(
+        "gpkg_converted_to_geojsonl",
+        input=str(input_gpkg),
+        output=str(output),
+        features=len(gdf),
+        bytes=output.stat().st_size,
+    )
+    return output
 
 
 _TIPPECANOE_MIN_TILE_SIZE: Final = 0
@@ -46,9 +67,7 @@ def _resolve_tippecanoe(tippecanoe_path: str) -> str:
     if "/" in tippecanoe_path or "\\" in tippecanoe_path:
         candidate = Path(tippecanoe_path)
         if not candidate.is_file():
-            raise TippecanoeNotFoundError(
-                f"tippecanoe binary not found at {tippecanoe_path}"
-            )
+            raise TippecanoeNotFoundError(f"tippecanoe binary not found at {tippecanoe_path}")
         return str(candidate)
     resolved = shutil.which(tippecanoe_path)
     if resolved is None:
@@ -72,13 +91,9 @@ def _build_command(
 ) -> list[str]:
     """Build the tippecanoe CLI argument list (does not execute)."""
     if not (0 <= min_zoom <= max_zoom <= 22):
-        raise ValueError(
-            f"invalid zoom range: min_zoom={min_zoom}, max_zoom={max_zoom}"
-        )
+        raise ValueError(f"invalid zoom range: min_zoom={min_zoom}, max_zoom={max_zoom}")
     if not (min_zoom <= base_zoom <= max_zoom):
-        raise ValueError(
-            f"base_zoom ({base_zoom}) must be within [{min_zoom}, {max_zoom}]"
-        )
+        raise ValueError(f"base_zoom ({base_zoom}) must be within [{min_zoom}, {max_zoom}]")
     if not layer_name or not layer_name.strip():
         raise ValueError("layer_name must be a non-empty string")
 
@@ -157,10 +172,14 @@ def generate_pmtiles(
     output_pmtiles = output_pmtiles.expanduser().resolve()
     output_pmtiles.parent.mkdir(parents=True, exist_ok=True)
 
+    input_path = input_gpkg
+    if input_gpkg.suffix.lower() == ".gpkg":
+        input_path = _gpkg_to_geojsonl(input_gpkg, input_gpkg.with_suffix(".gpkg.geojsonl"))
+
     tmp_path = output_pmtiles.with_name(f".{output_pmtiles.name}.tmp")
 
     cmd = _build_command(
-        input_gpkg=input_gpkg,
+        input_gpkg=input_path,
         output_pmtiles=tmp_path,
         tippecanoe=tippecanoe,
         min_zoom=min_zoom,

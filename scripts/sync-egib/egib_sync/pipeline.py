@@ -22,7 +22,7 @@ import asyncio
 import json
 import shutil
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -36,7 +36,7 @@ from egib_sync.downloader import (
 )
 from egib_sync.logging import get_logger
 from egib_sync.merger import merge_gpkg_files
-from egib_sync.pmtiles_gen import TippecanoeError, generate_pmtiles
+from egib_sync.pmtiles_gen import generate_pmtiles
 from egib_sync.sqlite_loader import (
     load_parcels_from_gpkg,
     parcels_count,
@@ -74,7 +74,7 @@ _BACKUP_PREFIX: Final = "ts"
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _format_backup_ts(when: datetime | None = None) -> str:
@@ -125,9 +125,7 @@ def cleanup_old_backups(backup_dir: Path, *, keep: int) -> int:
         except OSError as exc:
             logger.warning("backup_cleanup_failed", path=str(old), error=str(exc))
     if removed:
-        logger.info(
-            "backups_cleaned", dir=str(backup_dir), kept=keep, removed=removed
-        )
+        logger.info("backups_cleaned", dir=str(backup_dir), kept=keep, removed=removed)
     return removed
 
 
@@ -149,14 +147,50 @@ async def _run_download(
         logger.info("download_skipped_dry_run")
         return [], {"skipped": True, "reason": "dry_run"}, "dry-run"
 
-    if powiat_list_source is None:
-        powiat_list_source = settings.sources.powiat_list_url
+    if powiat_list_source is None and settings.sources.use_wfs:
+        from egib_sync.wfs import (
+            download_powiat_wfs,
+            resolve_powiat_name,
+        )
+
+        if not powiat_prefix or len(str(powiat_prefix)) < 4:
+            raise PipelineError(
+                "WFS download mode requires --powiat <TERYT> (4+ digits, e.g. 1417 "
+                "for powiat otwocki); no explicit powiat list source was given"
+            )
+
+        teryt = str(powiat_prefix)
+        settings.ensure_dirs()
+        result = await download_powiat_wfs(
+            teryt,
+            settings.raw_dir,
+            name=resolve_powiat_name(teryt),
+            settings=settings.download,
+            wfs_url=settings.sources.wfs_url,
+            wfs_layer=settings.sources.wfs_layer,
+            page_size=settings.sources.wfs_page_size,
+            max_parcels=settings.download.max_parcels,
+            max_result_bytes=settings.sources.raw_bytes_budget,
+        )
+        if not result.success:
+            raise PipelineError(f"wfs download failed for {teryt}: {result.error}")
+        summary: dict[str, Any] = {
+            "mode": "wfs-zbiorcza",
+            "teryt": teryt,
+            "name": result.name,
+            "parcels": result.parcels,
+            "pages": result.pages,
+            "hits": result.hits,
+            "gpkg_bytes": result.path.stat().st_size if result.path.exists() else 0,
+            "prefix": teryt,
+        }
+        logger.info("download_summary", **summary)
+        return [result.path], summary, f"wfs|{teryt}|{result.hits}"
+
     powiats = await load_powiat_list(powiat_list_source)
     powiats = filter_powiaty(powiats, powiat_prefix)
     if not powiats:
-        raise PipelineError(
-            f"no powiats matched prefix={powiat_prefix!r}; aborting download stage"
-        )
+        raise PipelineError(f"no powiats matched prefix={powiat_prefix!r}; aborting download stage")
 
     settings.ensure_dirs()
     results = await download_all_powiaty(powiats, settings.raw_dir)
@@ -166,9 +200,7 @@ async def _run_download(
 
     raw_files = [r.path for r in results if r.success and r.path.exists()]
     if not raw_files:
-        raise PipelineError(
-            f"all downloads failed ({summary.get('failed', 0)} failures); aborting"
-        )
+        raise PipelineError(f"all downloads failed ({summary.get('failed', 0)} failures); aborting")
 
     return raw_files, summary, _etag_from_powiat_list(powiats)
 
@@ -188,9 +220,7 @@ def _run_merge(
     if not raw_files:
         raise PipelineError("merge stage: no raw files provided")
 
-    backup_existing(
-        settings.merged_path, backup_dir=settings.backups_dir, stamp=stamp
-    )
+    backup_existing(settings.merged_path, backup_dir=settings.backups_dir, stamp=stamp)
     settings.ensure_dirs()
     return merge_gpkg_files(raw_files, settings.merged_path)
 
@@ -207,9 +237,7 @@ def _run_pmtiles(
         logger.info("pmtiles_skipped_dry_run")
         return settings.pmtiles_path
 
-    backup_existing(
-        settings.pmtiles_path, backup_dir=settings.backups_dir, stamp=stamp
-    )
+    backup_existing(settings.pmtiles_path, backup_dir=settings.backups_dir, stamp=stamp)
     settings.ensure_dirs()
     return generate_pmtiles(
         merged_path,
@@ -237,9 +265,7 @@ def _run_sqlite(
         logger.info("sqlite_skipped_dry_run")
         return 0
 
-    backup_existing(
-        settings.sqlite_path, backup_dir=settings.backups_dir, stamp=stamp
-    )
+    backup_existing(settings.sqlite_path, backup_dir=settings.backups_dir, stamp=stamp)
     settings.ensure_dirs()
     count = load_parcels_from_gpkg(
         merged_path,
@@ -347,8 +373,7 @@ async def run_pipeline(
                 raw_files = sorted(settings.raw_dir.glob("*.gpkg"))
                 if not raw_files:
                     raise PipelineError(
-                        "skip_download=True but no .gpkg files in "
-                        f"{settings.raw_dir}"
+                        f"skip_download=True but no .gpkg files in {settings.raw_dir}"
                     )
             logger.info("download_skipped_explicit", files=len(raw_files))
             download_summary = {"skipped": True, "reason": "skip_download"}
@@ -376,9 +401,7 @@ async def run_pipeline(
         merged_path = settings.merged_path
         if not skip_merge:
             try:
-                merged_path = _run_merge(
-                    settings, raw_files, dry_run=dry_run, stamp=stamp
-                )
+                merged_path = _run_merge(settings, raw_files, dry_run=dry_run, stamp=stamp)
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"merge: {exc}")
                 logger.error(
@@ -448,9 +471,7 @@ async def run_pipeline(
 
     finally:
         if not dry_run:
-            cleanup_old_backups(
-                settings.backups_dir, keep=settings.retention.backups_keep
-            )
+            cleanup_old_backups(settings.backups_dir, keep=settings.retention.backups_keep)
 
     finished = _utc_now()
     logger.info(

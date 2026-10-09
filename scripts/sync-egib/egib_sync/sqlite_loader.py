@@ -18,6 +18,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterable
 from datetime import datetime, timezone
+from math import isfinite
 from pathlib import Path
 from typing import Any, Final
 
@@ -165,6 +166,15 @@ def init_db(db_path: Path) -> None:
         conn.close()
 
 
+def _finite_or_zero(value: Any) -> float:
+    """Coerce to float; NaN/inf (NULL w SQLite) -> 0.0."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return number if isfinite(number) else 0.0
+
+
 def _row_from_feature(
     feature_id: str,
     attrs: dict[str, Any],
@@ -191,7 +201,7 @@ def _row_from_feature(
         str(attrs.get("commune_code", "")),
         str(attrs.get("region", "")),
         attrs.get("region_name"),
-        float(attrs.get("area_m2", 0.0)),
+        _finite_or_zero(attrs.get("area_m2", 0.0)),
         attrs.get("land_use"),
         geom_wkt,
         float(centroid.x),
@@ -303,8 +313,7 @@ def _flush(conn: sqlite3.Connection, buffer: list[tuple[Any, ...]]) -> int:
 
     map_sql = "INSERT INTO parcels_rtree_map(parcel_id, rtree_id) VALUES (?, ?)"
     index_sql = (
-        "INSERT INTO parcels_rtree(id, min_lng, max_lng, min_lat, max_lat) "
-        "VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO parcels_rtree(id, min_lng, max_lng, min_lat, max_lat) VALUES (?, ?, ?, ?, ?)"
     )
     map_rows: list[tuple[str, int]] = []
     for row in buffer:

@@ -70,9 +70,7 @@ def validate_schemas(gdf_a: gpd.GeoDataFrame, gdf_b: gpd.GeoDataFrame) -> None:
             f"column mismatch: only_in_first={only_a}, only_in_second={only_b}"
         )
     if gdf_a.crs != gdf_b.crs:
-        raise SchemaMismatchError(
-            f"CRS mismatch: first={gdf_a.crs}, second={gdf_b.crs}"
-        )
+        raise SchemaMismatchError(f"CRS mismatch: first={gdf_a.crs}, second={gdf_b.crs}")
 
 
 def validate_file_schemas(gpkg_files: Iterable[Path]) -> bool:
@@ -90,13 +88,10 @@ def validate_file_schemas(gpkg_files: Iterable[Path]) -> bool:
     for path in files[1:]:
         gdf = read_layer(path)
         if get_schema(gdf) != base_schema:
-            raise SchemaMismatchError(
-                f"schema mismatch between {files[0].name} and {path.name}"
-            )
+            raise SchemaMismatchError(f"schema mismatch between {files[0].name} and {path.name}")
         if gdf.crs != base_crs:
             raise SchemaMismatchError(
-                f"CRS mismatch between {files[0].name} ({base_crs}) "
-                f"and {path.name} ({gdf.crs})"
+                f"CRS mismatch between {files[0].name} ({base_crs}) and {path.name} ({gdf.crs})"
             )
     return True
 

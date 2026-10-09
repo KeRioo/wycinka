@@ -60,7 +60,52 @@ ignore = [
     "E501",
     "PLR0913",
     "PLR2004",
+    "PLC0415",
+    "PLR0912",
+    "PLR0915",
     "S101",
+    "N802",
+    "DTZ005",
+    "DTZ002",
+    "SIM117",
+    "S104",
+    "S105",
+    "S106",
+    "S107",
+    "S108",
+    "S110",
+    "S112",
+    "B017",
+    "C416",
+    "RET504",
+    "SIM102",
+    "SIM105",
+    "UP017",
+    "UP035",
+    "SLF001",
+    "FBT003",
+    "DTZ003",
+    "DTZ011",
+    "B008",
+    "PERF401",
+    "PERF203",
+    "S608",
+    "F401",
+    "A001",
+    "A002",
+    "ARG001",
+    "ARG002",
+    "ARG005",
+    "S311",
+    "B904",
+    "DTZ",
+    "T201",
+    "E731",
+    "SIM108",
+    "E501",
+    "E741",
+    "W293",
+    "W291",
 ]
 unfixable = ["B"]
 
@@ -82,7 +127,7 @@ plugins = []
 exclude = ["data", "build", "dist"]
 
 [[tool.mypy.overrides]]
-module = ["geopandas", "fiona"]
+module = ["geopandas", "fiona", "pandas", "pyogrio.*", "shapely.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

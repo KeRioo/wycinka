@@ -13,7 +13,6 @@ from httpx import Response
 
 from egib_sync.config import Settings
 
-
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 

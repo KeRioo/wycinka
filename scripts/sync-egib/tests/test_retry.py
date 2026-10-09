@@ -78,9 +78,10 @@ async def test_retry_when_exhausts_then_raises_retry_error() -> None:
         calls += 1
         raise ValueError("boom")
 
-    with patch("egib_sync.retry.asyncio.sleep", new=AsyncMockSleep), pytest.raises(
-        RetryError
-    ) as exc_info:
+    with (
+        patch("egib_sync.retry.asyncio.sleep", new=AsyncMockSleep),
+        pytest.raises(RetryError) as exc_info,
+    ):
         await fn()
     assert exc_info.value.attempts == 3
     assert isinstance(exc_info.value.last_exception, ValueError)

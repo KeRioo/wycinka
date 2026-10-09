@@ -4,6 +4,41 @@ ETL pipeline for Polish land registry (EGiB) data. Downloads GPKG files from
 [geoportal.gov.pl](https://www.geoportal.gov.pl), merges them, generates PMTiles
 for map rendering, and imports into SQLite for point queries.
 
+## Data sources (M10 — real data)
+
+The **eziwgpk HTML download endpoint is 404** (checked 2026-10-09, e.g.
+`https://integracja.gugik.gov.pl/eziwgpk/index.php?listapow=all`). The working
+official source is the collective GUGiK WFS:
+
+```
+https://mapy.geoportal.gov.pl/wss/service/PZGIK/EGIB/WFS/UslugaZbiorcza
+layer: ms:dzialki   CRS: EPSG:2180
+```
+
+The downloader pages through `GetFeature` (WFS 2.0, `STARTINDEX`, server caps
+at 1000 features/request), filters by powiat with an OGC
+`PropertyIsLike` filter on `ms:ID_DZIALKI` (TERYT prefix, e.g. `1417%` = powiat
+otwocki), reprojects EPSG:2180 → EPSG:4326 and normalizes attributes to the
+canonical schema (`id`, `teryt`, `number`, `voivodeship`, `county`, `commune`,
+`region`, `area_m2`, `land_use`, …). When `POLE_EWIDENYJNE` is empty the field
+area is computed from the (planar) EPSG:2180 geometry.
+
+Run a single powiat via WFS (recommended, works offline-listed):
+
+```bash
+python -m egib_sync --wfs --powiat 1417          # otwocki
+# or via env: EGIB_SOURCES__USE_WFS=1, EGIB_SOURCES__WFS_URL=..., EGIB_SOURCES__WFS_PAGE_SIZE=1000
+```
+
+Guardrails:
+- `EGIB_SOURCES__RAW_BYTES_BUDGET` (default 4 GB) aborts the powiat when
+  the raw download budget would be exceeded (`DiskBudgetExceededError`),
+- server pages are capped at 1000 features by GUGiK (178 103 parcels in
+  otwocki ⇒ ~179 requests; slow server, measure in hours),
+- `resultType=hits` may fail while the backend PostGIS is down — the downloader
+  continues with `hits = -1`, rejects transient 400/500 with backoff
+  (6 attempts), and dedupes by `ID_DZIALKI` so repeats never duplicate parcels.
+
 ## Quick start
 
 ```bash
@@ -13,14 +48,14 @@ pip install -e ".[dev]"
 # Run tests
 pytest
 
-# Run pipeline (downloads everything)
-python -m egib_sync
+# Run full pipeline on one powiat (recommended for M10 / otwocki)
+python -m egib_sync --wfs --powiat 1417
+
+# Legacy: JSON powiat list path (GPKG URLs per powiat)
+python -m egib_sync --powiat-list-source /path/list.json --powiat 14
 
 # Dry run (validates config, no files written)
 python -m egib_sync --dry-run
-
-# Single voivodeship (e.g. mazowieckie = 14)
-python -m egib_sync --powiat 14
 
 # Skip stages (e.g. only re-generate PMTiles from existing merged.gpkg)
 python -m egib_sync --skip-download --skip-merge --skip-sqlite
@@ -28,12 +63,13 @@ python -m egib_sync --skip-download --skip-merge --skip-sqlite
 
 ## Stages
 
-The pipeline runs four stages in order. Each can be skipped:
+> The pipeline runs four stages in order. Each can be skipped:
+>
+> 1. **download** — WFS zbiorcza GUGiK (single powiat, `--wfs`) or legacy powiat-list JSON
+> 2. **merge** — concatenate all GPKGs into one file
+> 3. **pmtiles** — GPKG → GeoJSONSeq → `tippecanoe` → vector tiles
+> 4. **sqlite** — import merged data into SQLite with R-tree spatial index
 
-1. **download** — fetch GPKG per powiat from geoportal.gov.pl
-2. **merge** — concatenate all GPKGs into one file
-3. **pmtiles** — invoke `tippecanoe` to produce vector tiles
-4. **sqlite** — import merged data into SQLite with R-tree spatial index
 
 ### Atomicity
 

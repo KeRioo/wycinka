@@ -396,8 +396,12 @@ def test_serialize_result_when_called_then_includes_all_keys(
         merged_path=tmp_path / "m.gpkg",
         raw_files=[],
         parcels_count=42,
-        started_at=__import__("datetime").datetime(2026, 9, 30, tzinfo=__import__("datetime").timezone.utc),
-        finished_at=__import__("datetime").datetime(2026, 9, 30, 1, tzinfo=__import__("datetime").timezone.utc),
+        started_at=__import__("datetime").datetime(
+            2026, 9, 30, tzinfo=__import__("datetime").timezone.utc
+        ),
+        finished_at=__import__("datetime").datetime(
+            2026, 9, 30, 1, tzinfo=__import__("datetime").timezone.utc
+        ),
         errors=[],
     )
     payload = json.loads(serialize_result(result))

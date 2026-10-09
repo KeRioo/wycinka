@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
-import logging
 import sys
 from pathlib import Path
 
 from egib_sync.config import Settings, SourcesSettings
 from egib_sync.logging import configure_logging, get_logger
-from egib_sync.pipeline import PipelineResult, run_pipeline_sync
+from egib_sync.pipeline import run_pipeline_sync
 
 logger = get_logger(__name__)
 
@@ -24,6 +22,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--powiat",
         metavar="TERYT_PREFIX",
         help="Filter powiats by TERYT prefix (np. '14' = mazowieckie)",
+    )
+    parser.add_argument(
+        "--wfs",
+        action="store_true",
+        help=(
+            "Use the GUGiK zbiorcza WFS source for a single powiat "
+            "(requires --powiat <TERYT>); bypasses the legacy powiat list / GPKG URLs"
+        ),
     )
     parser.add_argument(
         "--skip-download",
@@ -73,6 +79,12 @@ def _build_settings(args: argparse.Namespace) -> Settings:
         overrides["log_level"] = args.log_level
     if args.powiat_list_source is not None:
         overrides["sources"] = SourcesSettings(powiat_list_url=args.powiat_list_source)
+    if args.wfs:
+        sources = overrides.get("sources")
+        if isinstance(sources, SourcesSettings):
+            sources.use_wfs = True
+        else:
+            overrides["sources"] = SourcesSettings(use_wfs=True)
     if overrides:
         return Settings(**overrides)
     return Settings()

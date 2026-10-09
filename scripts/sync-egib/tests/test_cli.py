@@ -19,29 +19,37 @@ def test_cli_help_exits_zero():
 
 
 def test_cli_dry_run_with_default_settings(tmp_path):
-    rc = cli_main.main([
-        "--dry-run",
-        "--data-dir", str(tmp_path),
-        "--powiat", "14",
-        "--skip-download",
-        "--skip-merge",
-        "--skip-pmtiles",
-        "--skip-sqlite",
-    ])
+    rc = cli_main.main(
+        [
+            "--dry-run",
+            "--data-dir",
+            str(tmp_path),
+            "--powiat",
+            "14",
+            "--skip-download",
+            "--skip-merge",
+            "--skip-pmtiles",
+            "--skip-sqlite",
+        ]
+    )
     assert rc == 0
 
 
 def test_cli_writes_report(tmp_path):
     report_path = tmp_path / "report.json"
-    rc = cli_main.main([
-        "--dry-run",
-        "--data-dir", str(tmp_path),
-        "--skip-download",
-        "--skip-merge",
-        "--skip-pmtiles",
-        "--skip-sqlite",
-        "--report", str(report_path),
-    ])
+    rc = cli_main.main(
+        [
+            "--dry-run",
+            "--data-dir",
+            str(tmp_path),
+            "--skip-download",
+            "--skip-merge",
+            "--skip-pmtiles",
+            "--skip-sqlite",
+            "--report",
+            str(report_path),
+        ]
+    )
     assert rc == 0
     assert report_path.exists()
     payload = json.loads(report_path.read_text(encoding="utf-8"))
@@ -50,15 +58,19 @@ def test_cli_writes_report(tmp_path):
 
 
 def test_cli_log_level_override(tmp_path):
-    rc = cli_main.main([
-        "--dry-run",
-        "--data-dir", str(tmp_path),
-        "--log-level", "DEBUG",
-        "--skip-download",
-        "--skip-merge",
-        "--skip-pmtiles",
-        "--skip-sqlite",
-    ])
+    rc = cli_main.main(
+        [
+            "--dry-run",
+            "--data-dir",
+            str(tmp_path),
+            "--log-level",
+            "DEBUG",
+            "--skip-download",
+            "--skip-merge",
+            "--skip-pmtiles",
+            "--skip-sqlite",
+        ]
+    )
     assert rc == 0
 
 
@@ -71,15 +83,19 @@ def test_cli_invalid_log_level_exits_nonzero():
 def test_cli_powiat_list_source_override_creates_settings(tmp_path):
     src = tmp_path / "powiat_list.json"
     src.write_text("[]", encoding="utf-8")
-    rc = cli_main.main([
-        "--dry-run",
-        "--data-dir", str(tmp_path),
-        "--powiat-list-source", str(src),
-        "--skip-download",
-        "--skip-merge",
-        "--skip-pmtiles",
-        "--skip-sqlite",
-    ])
+    rc = cli_main.main(
+        [
+            "--dry-run",
+            "--data-dir",
+            str(tmp_path),
+            "--powiat-list-source",
+            str(src),
+            "--skip-download",
+            "--skip-merge",
+            "--skip-pmtiles",
+            "--skip-sqlite",
+        ]
+    )
     assert rc == 0
 
 
@@ -101,13 +117,16 @@ def test_cli_returns_2_when_pipeline_fails(tmp_path):
     )
 
     with patch("egib_sync.__main__.run_pipeline_sync", return_value=failed):
-        rc = cli_main.main([
-            "--data-dir", str(tmp_path),
-            "--skip-download",
-            "--skip-merge",
-            "--skip-pmtiles",
-            "--skip-sqlite",
-        ])
+        rc = cli_main.main(
+            [
+                "--data-dir",
+                str(tmp_path),
+                "--skip-download",
+                "--skip-merge",
+                "--skip-pmtiles",
+                "--skip-sqlite",
+            ]
+        )
         assert rc == 2
 
 
@@ -117,13 +136,16 @@ def test_cli_returns_1_when_pipeline_raises(tmp_path):
         "egib_sync.__main__.run_pipeline_sync",
         side_effect=RuntimeError("boom"),
     ):
-        rc = cli_main.main([
-            "--data-dir", str(tmp_path),
-            "--skip-download",
-            "--skip-merge",
-            "--skip-pmtiles",
-            "--skip-sqlite",
-        ])
+        rc = cli_main.main(
+            [
+                "--data-dir",
+                str(tmp_path),
+                "--skip-download",
+                "--skip-merge",
+                "--skip-pmtiles",
+                "--skip-sqlite",
+            ]
+        )
         assert rc == 1
 
 
@@ -136,15 +158,19 @@ def test_cli_no_args_invokes_full_dry_run(tmp_path, monkeypatch):
 
 def test_cli_report_parent_dir_is_created(tmp_path):
     report_path = tmp_path / "nested" / "deep" / "report.json"
-    rc = cli_main.main([
-        "--dry-run",
-        "--data-dir", str(tmp_path),
-        "--skip-download",
-        "--skip-merge",
-        "--skip-pmtiles",
-        "--skip-sqlite",
-        "--report", str(report_path),
-    ])
+    rc = cli_main.main(
+        [
+            "--dry-run",
+            "--data-dir",
+            str(tmp_path),
+            "--skip-download",
+            "--skip-merge",
+            "--skip-pmtiles",
+            "--skip-sqlite",
+            "--report",
+            str(report_path),
+        ]
+    )
     assert rc == 0
     assert report_path.exists()
     assert report_path.parent.is_dir()
@@ -155,11 +181,14 @@ def test_cli_keyboard_interrupt_returns_130(tmp_path):
         "egib_sync.__main__.run_pipeline_sync",
         side_effect=KeyboardInterrupt(),
     ):
-        rc = cli_main.main([
-            "--data-dir", str(tmp_path),
-            "--skip-download",
-            "--skip-merge",
-            "--skip-pmtiles",
-            "--skip-sqlite",
-        ])
+        rc = cli_main.main(
+            [
+                "--data-dir",
+                str(tmp_path),
+                "--skip-download",
+                "--skip-merge",
+                "--skip-pmtiles",
+                "--skip-sqlite",
+            ]
+        )
         assert rc == 130
