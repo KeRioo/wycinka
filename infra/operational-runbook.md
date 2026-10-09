@@ -3,6 +3,60 @@
 Instrukcja operacyjna całego stacku: deploy, ETL cron-container, tunel,
 monitoring, backupy i awarie. Dotyczy `infra/` w tym repo (docker compose).
 
+## Auth (basic auth, prod)
+
+Produkcja ma **basic auth na całym site** — jeden user `wycinka`, hasło z
+.env, caddy sprawdza przy każdym żądaniu do web/api (dozwolone wyjątki:
+`OPTIONS` — preflight, bo przeglądarka nie wysyła credentials do preflight).
+Dev (`APP_ENV=development`) działa bez hasła.
+
+### Generacja hasła
+
+```bash
+docker run --rm caddy:2-alpine caddy hash-password --plaintext '<twoje-haslo>'
+# wypisze np. $2a$14$M9j4E... — cały string do AUTH_PASSWORD_HASH w infra/.env
+```
+
+Alternatywnie `htpasswd -nbBC 10 wycinka '<twoje-haslo>'` (pakiet apache2-utils)
+— wynik jest kompatybilny (bcrypt).
+
+### Sekrety i fail-fast
+
+- `AUTH_PASSWORD_HASH` w `infra/.env` (`.env` jest w .gitignore). Nigdy nie
+  commituj wygenerowanego hasła do repo.
+- Bez poprawnego hashu logowanie zawsze zwraca 401 (świadome fail-closed) —
+  caddy wystartuje, ale site jest niedostępny bez hasła.
+- Rotacja hasła: ustaw nowe hash w .env i `docker compose up -d caddy`
+  (caddy rereaduje env przy restarcie; `docker compose restart caddy`
+  wystarcza).
+
+### CORS
+
+- Prod: `Access-Control-Allow-Origin: $FRONTEND_ORIGIN` (dokładne dopasowanie,
+  z .env; compose defaultuje na `https://$DOMAIN`). `*` NIE jest używane w prod.
+- Dev: fallback `Access-Control-Allow-Origin: *` (niewrażliwy, bo dev to
+  localhost).
+- Preflight `OPTIONS` → `204` bez auth, z nagłówkami `Access-Control-*` zanim
+  trafi do API.
+
+### PMTiles za basic auth
+
+Frontend fetchuje PMTiles z tego samego origin co PWA (razem za Caddy), więc
+przeglądarka po zalogowaniu dokleja cached credentials do subsekwentnych
+fetchy (same-origin), w tym Range requestów `pmtiles` protokołu. Nic do
+zmiany po stronie frontendu — odnotowane dla integracji:
+`usePMTiles.ts` działa bez zmian, o ile URL jest relatywny/same-origin.
+
+### Alternatywa: nginx
+
+Nginx mirror (`infra/nginx/nginx.conf`) ma analogiczne `auth_basic` +
+CORS nagłówki. Wymaga .htpasswd (bcrypt) automounted:
+
+```bash
+htpasswd -bnBC 10 "wycinka" '<twoje-haslo>' > infra/nginx/.htpasswd
+# compose (wariant nginx): - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+```
+
 ## Stack i przepływ danych
 
 ```

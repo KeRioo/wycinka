@@ -1,9 +1,88 @@
 # Caddyfile — wycinka.app
-# Auto-HTTPS, reverse proxy, kompresja.
-# W produkcji DOMAIN ustawione przez Cloudflare Tunnel + DNS challenge.
+# Auto-HTTPS, reverse proxy, kompresja, CORS i basic auth.
+#
+# Zmienne środowiskowe (patrz infra/.env.example + operational-runbook.md):
+#   DOMAIN              — domena site'u (default: localhost)
+#   APP_ENV             — production | development
+#   FRONTEND_ORIGIN     — dozwolony origin CORS dla prod (compose ustawia
+#                         default na https://$DOMAIN; w Caddyfile: https://localhost)
+#   AUTH_PASSWORD_HASH  — bcrypt z `caddy hash-password` (wymagany w prod)
+#
+# CORS: w prod origin z FRONTEND_ORIGIN (dokładne dopasowanie, nie `*`).
+#       W dev (APP_ENV=development) fallback na `*`.
+# Auth: w prod basic_auth na CAŁYM site (web + api). W dev bez hasła.
+#       PMTiles działa z basic auth, bo frontend fetchuje PMTiles z tego
+#       samego origin za Caddy — przeglądarka cache'uje sesję basic auth
+#       (credentials same-origin) i dokleja do subsekwentnych zapytań.
+#
+# Snippety wybierane wg APP_ENV przez infra/caddy/entrypoint.sh (substytucja
+# import {$VAR} nie działa — parser rozwija `import` przed substytucją env),
+# dlatego nazwy snippetów muszą być zdefiniowane PRZED `import`.
+
+(cors_production) {
+	header {
+		Access-Control-Allow-Origin "{$FRONTEND_ORIGIN:https://localhost}"
+		Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type, Authorization, Range"
+		Access-Control-Expose-Headers "Accept-Ranges, Content-Length, Content-Range, ETag"
+		Access-Control-Max-Age "86400"
+	}
+	# Preflight: przeglądarka nie wysyła credentials na OPTIONS — odpowiadamy
+	# 204 (handle, bo respond @matcher nie short-circuitował za handled-routing)
+	@cors_preflight {
+		method OPTIONS
+	}
+	handle @cors_preflight {
+		respond 204
+	}
+}
+
+(cors_development) {
+	header {
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type, Authorization, Range"
+		Access-Control-Expose-Headers "Accept-Ranges, Content-Length, Content-Range, ETag"
+		Access-Control-Max-Age "86400"
+	}
+	@cors_preflight {
+		method OPTIONS
+	}
+	handle @cors_preflight {
+		respond 204
+	}
+}
+
+# --- Auth: produkcja — basic auth na całym site ---
+# Hasło: AUTH_PASSWORD_HASH z `docker run --rm caddy:2-alpine caddy hash-password`.
+# Jeśli zmienna nieustawiona — Caddy nie przyjmie poprawnego hasła (fail-fast
+# przy próbie logowania; kompilacja przejdzie, trzeba ustawić env).
+(auth_production) {
+	# OPTIONS (preflight) bez auth — przeglądarka nie wysyła credentials na preflight
+	@auth_preflight {
+		method OPTIONS
+	}
+	@not_login_preflight {
+		not method OPTIONS
+	}
+	basic_auth @not_login_preflight {
+		wycinka {$AUTH_PASSWORD_HASH:VALIDATE-MISSING-AUTH_PASSWORD_HASH}
+	}
+}
+
+# --- Auth: development — bez hasła ---
+(auth_development) {
+}
+
+{
+	admin 127.0.0.1:2019
+}
 
 {$DOMAIN:localhost} {
 	encode gzip zstd
+
+	import {$APP_ENV:production}_cors
+	import {$APP_ENV:production}_auth
 
 	# Bezpieczne nagłówki dla PWA
 	header {
@@ -17,10 +96,6 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		# Permissions
 		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
-		# CORS — dla endpointów API, szerokie bo PWA na różnych domenach
-		Access-Control-Allow-Origin "*"
-		Access-Control-Allow-Methods "GET, POST, OPTIONS"
-		Access-Control-Allow-Headers "Content-Type, Authorization, Range"
 	}
 
 	# --- Healthcheck (prosto do API, krótka ścieżka) ---

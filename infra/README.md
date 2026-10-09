@@ -12,6 +12,8 @@ cd infra
 # 1. Konfiguracja
 cp .env.example .env
 # Uzupelnij .env: DOMAIN, TUNNEL_ID
+# Hasło do basic auth (prod): docker run --rm caddy:2-alpine caddy hash-password --plaintext 'twoje-haslo'
+#   wklej wynik do AUTH_PASSWORD_HASH w .env (patrz operational-runbook.md, sekcja Auth)
 
 # 2. Cloudflare Tunnel (jednorazowo)
 #    zobacz cloudflared/README.md
@@ -134,8 +136,15 @@ Lekka walidacja bez uruchamiania kontenerow (dziala w CI):
 ```bash
 cd /path/to/wycinkaApp
 pip install pyyaml  # jesli brak
-python -m infra.tests
+python infra/tests/run.py
 ```
+
+51+ testów, w tym CORS/auth:
+- Caddyfile: snippety `cors_production`/`cors_development`/`auth_*`, env-owy
+  origin (`{$FRONTEND_ORIGIN:...}`), `*` tylko w dev, `basic_auth` +
+  preflight bypass, entrypoint.sh renderujący wg APP_ENV
+- nginx: nagłówki Access-Control + auth_basic (parity z Caddy)
+- .env.example: FRONTEND_ORIGIN + AUTH_PASSWORD_HASH
 
 51 testow:
 Sekcje:

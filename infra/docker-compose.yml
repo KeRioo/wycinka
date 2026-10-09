@@ -44,6 +44,15 @@ services:
     build: ./caddy
     image: wycinka-caddy:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-wycinka.app}
+      APP_ENV: ${APP_ENV:-production}
+      # CORS origin dla prod (dokładne dopasowanie). Dev (APP_ENV=development)
+      # ignoruje tę wartość — fallback na "*".
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://${DOMAIN:-wycinka.app}}
+      # bcrypt z `docker run --rm caddy:2-alpine caddy hash-password`;
+      # wymagany w APP_ENV=production (bez niego logowanie zawsze 401) — patrz runbook.
+      AUTH_PASSWORD_HASH: ${AUTH_PASSWORD_HASH:-VALIDATE-MISSING-AUTH_PASSWORD_HASH}
     ports:
       - "80:80"
       - "443:443"
