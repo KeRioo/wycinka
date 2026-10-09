@@ -54,6 +54,10 @@ services:
     # Custom build z pluginem cloudflare-dns wróci przy wystawianiu do internetu
     # (auto-HTTPS z DNS challenge); dla LAN/LP/WLAN stock wystarczy.
     image: caddy:2.10.0-alpine
+    # healthcheck działa po 127.0.0.1 — `localhost` w Alpine wpadnie w ::1,
+    # a admin endpoint nasłuchuje na 127.0.0.1 (IPv4)
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
     restart: unless-stopped
     entrypoint: ["/usr/local/bin/entrypoint.sh", "run", "--config", "/tmp/Caddyfile.rendered", "--adapter", "caddyfile"]
     environment:
