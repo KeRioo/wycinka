@@ -76,13 +76,18 @@ END;
 
 CREATE TRIGGER parcels_rtree_delete AFTER DELETE ON parcels
 BEGIN
-  DELETE FROM parcels_rtree_map WHERE parcel_id = OLD.id;
   DELETE FROM parcels_rtree WHERE id = (
     SELECT rtree_id FROM parcels_rtree_map WHERE parcel_id = OLD.id
   );
+  DELETE FROM parcels_rtree_map WHERE parcel_id = OLD.id;
 END;
 ```
 
+> **Uwaga (fix 0002):** kolejność w `parcels_rtree_delete` jest istotna — najpierw
+> usuwany jest wpis z `parcels_rtree` (subquery czyta `rtree_id` z mapy, zanim
+> mapa zostanie wyczyszczona), dopiero potem wiersz mapy. Odwrócona kolejność
+> zostawiała orphan w `parcels_rtree` (bug naprawiony w migracji
+> `0002_fix_rtree_delete_trigger`, która czyści też istniejące orphany).
 > **Uwaga:** ETL (`scripts/sync-egib/egib_sync/sqlite_loader.py`) **nie używa triggerów** — przy resecie bazy najpierw buduje R-tree jawnie (w batch), a potem wstawia do `parcels`. Backend używa triggerów do utrzymywania synchronizacji przy runtime (np. ewentualne ręczne update'y). Oba podejścia są równoważne, triggerów nie używa się jednocześnie.
 
 **Query „co jest w punkcie (X, Y)?"** (R-tree bbox filter + exact pip):
