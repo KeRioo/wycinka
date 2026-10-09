@@ -56,11 +56,21 @@ async function serveMockPmtiles(context: import('@playwright/test').BrowserConte
 async function ensureProjectAndFab(page: Page): Promise<void> {
   await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(500);
-  const createBtn = page.getByTestId('create-first-project');
-  const createVisible = await createBtn.isVisible().catch(() => false);
-  if (createVisible) {
-    await createBtn.click({ force: true });
-    await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const fabVisible = await page
+      .getByTestId('fab-add-tree')
+      .isVisible()
+      .catch(() => false);
+    if (!fabVisible) {
+      const createBtn = page.getByTestId('create-first-project');
+      if (await createBtn.isVisible().catch(() => false)) {
+        await createBtn.click({ force: true });
+        await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
+      }
+      await page.waitForTimeout(1000);
+    } else {
+      break;
+    }
   }
   await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
 }

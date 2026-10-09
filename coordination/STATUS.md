@@ -464,3 +464,24 @@ Trigger `parcels_rtree_delete` (AFTER DELETE ON parcels) najpierw czyścił `par
 - e2e: playwright config ma webServer `npm run dev` → w jobie `npx playwright install --with-deps chromium`; upload raportu jako artifact przy failure.
 - Walidacja: YAML parsuje się (yaml.safe_load), wersje actions: checkout@v4, setup-python@v5, setup-node@v4, upload-artifact@v4.
 - Commit 8da0cf2 — nie mergować do main (nadzorca).
+
+## Frontend (backlog #9 + #8 + E2E settings) — branch feat/frontend-e2e-gps (2026-10-09)
+
+- [x] **Backlog #9 — GPS averaging** (`src/hooks/useGeolocation.ts`):
+  - Nowa opcja `averagingSamples?: number` (default 1 — dotychczasowe zachowanie bez zmian; przy >=2 używa `watchPosition` automatycznie) + `averagingWindowMs?: number` (default 10s).
+  - Bufor ostatnich N odczytów w oknie czasowym; wynik = MEDIANA lat/lng; outlier-reject accuracy (odrzucane odczyty z accuracy > 2× mediana accuracy; `AVERAGING_ACCURACY_OUTLIER_FACTOR=2`); accuracy wyniku = mediana zaakceptowanych.
+  - `refresh()` czyści bufor (nowa sesja pomiaru).
+  - Integracja: `MapPage` → `useGeolocation({ averagingSamples: mode === 'idle' ? 1 : 5 })` — podczas dodawania/edycji drzewa (mode placing/editing)GPS z watch + mediana 5 próbek; AddTreePanel/GpsIndicator/ArrowPad konsumują uśrednioną pozycję bez zmian (props flow).
+  - Testy: 14 nowych unit `tests/unit/useGeolocationAveraging.test.ts` (mediana lat/lng, outlier accuracy—including borderline keep, okno czasowe eviction, evicted buffer > N, default passthrough/watch-not-called, averaging>wymusza watch, refresh czyści bufor, stała okna).
+- [x] **Backlog #8 — E2E hold-to-repeat ArrowPad** (`tests/e2e/arrowpad-hold.spec.ts`): 3 scenariusze na real browser (page.mouse.down/up): hold 1.2s → offset ≥2.0 m (interval ~110 ms działa), release → interval czyszczony (stabilność 500 ms), soak 5 kolejnych przytrzymań (monotoniczny przyrost + brak stuck-interval). Unit już istniał; E2E na realnych timerach.
+- [x] **E2E flow ustawień** (`tests/e2e/settings.spec.ts`): 3 scenariusze — gatunki (add/remove/reorder + persist po reload), przedziały override + PDF prefs persist po reload, kopia zapasowa export→import overwrite same-origin (komunikat „nadpisanie", 2 projekty przywrócone, config Projekt 1 zweryfikowany po otwarciu przez SPA nav). Dexie real, backend mockowany route'ami (`/api/v1/version`, `/api/v1/pmtiles/**`, geolocation mock) — pattern jak trees.spec.
+- [x] **Stabilizacja E2E** (`tests/e2e/tree-list.spec.ts`): `ensureProjectAndFab` z retry (≤5 kliknięć zamiast pojedynczego) — flake „Brak projektu" pod obciążeniem parallel workers.
+- Testy: **344/344 unit pass** (+14); **18/18 E2E pass** (15 istniejących + 3 arrowpad + 3 settings — arrowpad 3, settings 3 ⇒ 18 total: 12 starych + 6 nowych).
+- Coverage: **92.68% lines / 88.24% branches** (threshold 80 ✅); useGeolocation 96.61%.
+- Gates: typecheck ✅ / eslint --max-warnings=0 ✅ / test ✅ / test:coverage ✅ / build (PWA dist) ✅ / test:e2e ✅.
+- Commits: `ab7ada4` (feat GPS averaging), `0b2003f` (test E2E arrowpad), `dffedd4` (test E2E settings), `5c15904` (test stabilizacja).
+- Nie pochodzi z tej sesji: playwight core bump? — **nie**, projekt używa `@playwright/test@^1.48` (1.63.0 z lockfile); environment wymagał `npx playwright install chromium` (headless-shell v1243).
+
+### Backlog poruszone pozycje
+- #8 (hold-to-repeat E2E) ✅ — **done**
+- #9 (GPS averaging) ✅ — **done**
