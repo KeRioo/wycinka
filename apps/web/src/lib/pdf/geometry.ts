@@ -1,6 +1,8 @@
 import type { Geometry } from '@/services/api.types';
 import type { LngLat } from '@/services/api.types';
 
+export type { LngLat } from '@/services/api.types';
+
 export interface BBox {
   minX: number;
   minY: number;

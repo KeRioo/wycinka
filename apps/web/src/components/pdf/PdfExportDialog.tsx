@@ -3,6 +3,8 @@ import { FileDown, X } from 'lucide-react';
 import { useState } from 'react';
 import type { PdfPrefs, Project, Tree } from '@/db/schema';
 import { generatePdfReport, pdfFileName } from '@/lib/pdf/pdfReport';
+import { api } from '@/services/api';
+import type { Parcel, ParcelAggregateResponse } from '@/services/api.types';
 import { useProjectStore } from '@/stores/projectStore';
 import Compass from './Compass';
 
@@ -28,6 +30,7 @@ export interface PdfExportDialogProps {
   open: boolean;
   project: Project;
   trees: readonly Tree[];
+  parcels?: readonly Parcel[];
   onClose: () => void;
 }
 
@@ -35,6 +38,7 @@ export default function PdfExportDialog({
   open,
   project,
   trees,
+  parcels = [],
   onClose,
 }: PdfExportDialogProps): JSX.Element {
   const [prefs, setPrefs] = useState<PdfPrefs>(project.pdfPrefs);
@@ -55,7 +59,20 @@ export default function PdfExportDialog({
     setError(null);
     try {
       await savePdfPrefs(project.id, prefs);
-      const doc = generatePdfReport({ project: { ...project, pdfPrefs: prefs }, trees });
+      let aggregate: ParcelAggregateResponse | null = null;
+      if (parcels.length > 1) {
+        try {
+          aggregate = await api.aggregateParcels(parcels.map((p) => p.teryt));
+        } catch {
+          aggregate = null;
+        }
+      }
+      const doc = generatePdfReport({
+        project: { ...project, pdfPrefs: prefs },
+        trees,
+        parcels,
+        ...(aggregate !== null ? { aggregate } : {}),
+      });
       doc.save(pdfFileName(project, new Date()));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nieznany błąd generowania PDF');
