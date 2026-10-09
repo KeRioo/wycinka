@@ -35,6 +35,11 @@ class Settings(BaseSettings):
         description="Path to the PMTiles archive served via Range requests",
     )
 
+    log_file: Path = Field(
+        default=Path("wycinka.log"),
+        description="File used for JSON logs in production (dev logs to stdout)",
+    )
+
     cors_allow_origins: str = Field(
         default="*",
         description="Comma separated list of allowed CORS origins",
@@ -64,6 +69,14 @@ class Settings(BaseSettings):
         description="Skip db/pmtiles availability check for this many seconds after startup",
     )
 
+    sync_command: str = Field(
+        default="",
+        description=(
+            "External command that runs the EGiB sync pipeline "
+            "(scripts/sync-egib). Empty disables /api/v1/sync/trigger."
+        ),
+    )
+
     @property
     def cors_origins_list(self) -> list[str]:
         raw = self.cors_allow_origins.strip()
@@ -78,6 +91,10 @@ class Settings(BaseSettings):
     @property
     def pmtiles_path_resolved(self) -> Path:
         return Path(self.pmtiles_path).expanduser().resolve()
+
+    @property
+    def log_file_resolved(self) -> Path:
+        return Path(self.log_file).expanduser().resolve()
 
 
 @lru_cache(maxsize=1)
