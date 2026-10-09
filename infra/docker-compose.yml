@@ -10,6 +10,9 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-production}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Układ wolumenu (pełni ETL): data/sqlite/parcels.sqlite + data/pmtiles/dzialki.pmtiles
+      WYCINKA_DB_PATH: /app/data/sqlite/parcels.sqlite
+      WYCINKA_PMTILES_PATH: /app/data/pmtiles/dzialki.pmtiles
       WYCINKA_SYNC_COMMAND: ${WYCINKA_SYNC_COMMAND:-python -m egib_sync --powiat ${ETL_POWIAT:-}}
     volumes:
       - api-data:/app/data
