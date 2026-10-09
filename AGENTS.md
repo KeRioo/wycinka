@@ -328,4 +328,71 @@ Twój moduł jest gotowy gdy:
 - **NIE edytuj** dokumentów w `docs/` — to robota nadzorcy
 - **Jeśli masz pytanie architektoniczne** — sprawdź PLAN.md, jeśli nie ma odpowiedzi, dodaj do `REQUESTS.md` i kontynuuj z hipotezą
 
+---
+
+## 11. Dobre praktyki (lessons learned — obowiązują)
+
+> Zebrane z realnych incydentów. Traktuj jak rozszerzenie §0 i §4.
+
+### 11.1 Praca równoległa — worktree per agent (standard)
+
+```bash
+git worktree add ../wt-<modul> -b feat/<modul> main
+# agent pracuje WYŁĄCZNIE w ../wt-<modul>/<swoj-katalog>
+# po merge nadzorcy:
+git worktree remove ../wt-<modul> --force && git branch -d <branch>
+```
+
+- **Jeden agent = jeden worktree = jeden katalog właścicielski** (§3). Zero współdzielenia checkoutu.
+- Merge **tylko przez nadzorcę**, zawsze `--no-ff`, sekwencyjnie; gałąź po merge usuwana.
+- Spodziewaj się konfliktu w `coordination/STATUS.md` (wszyscy dopisują raport) — nadzorca scala ręcznie i **zachowuje wszystkie wpisy**.
+
+### 11.2 Formatowanie — nie ruszaj cudzego kodu
+
+- **ZAKAZ formatera na całości** (`prettier --write src/**`, `ruff format .`) — łapie pliki poza TWOIM scope i psuje review (incydent: 60+ reformatowanych plików, wycofywane ręcznie).
+- Formatuj **tylko pliki, które edytujesz**.
+- Nadzorca przy merge weryfikuje szum formatowania: `git diff -w main...<branch>` — pusty diff = zmiana była tylko whitespace. Przy konflikcie preferowana jest wersja z gałęzi funkcyjnej (`git checkout --ours <plik>`).
+
+### 11.3 Testy E2E (Playwright) — twarde zasady
+
+- **Baza URL to port 5173 (hardcoded w config)** — uruchamiaj TYLKO `npm run test:e2e` (dodaje `--config tests/e2e/playwright.config.ts`). Ręczny `npx playwright test` bez `--config` daje „Cannot navigate to invalid URL" dla relative `page.goto('/x')` (fałszywe faile w auditowanych runach).
+- `E2E_PORT` env **nie działa** — config nie parsuje envu. Inny port = najpierw zmiana w `tests/e2e/playwright.config.ts`.
+- **Fixture `tests/e2e/fixtures/minimal.pmtiles` jest zcommitowany (`git add -f`)** — *.pmtiles jest w .gitignore, nie kasuj! Na przyszłość: świeże kopiowanie pliku `test_fixture_1.pmtiles` z protomaps/PMTiles `js/test/data` (468 B) — pewny; małe syntetyczne v3 bywały odrzucane przez specy walidujące.
+- **Determinizm > timing**: czekaj na *element/warunek*, nie `waitForTimeout`; freeze timery (`vi.useFakeTimers()`) w unitach. Przy testach geometrycznych **ustaw zoom deterministycznie** (`jumpTo`) przed asercjami zależnymi od skali (incydent: snap threshold na odległości 2,06 m przy progu 2,19 m po fitBounds).
+- **IndexedDB między testami**: kontekst Playwright ma świeży profil — nie używaj `deleteDatabase` w `initScript` (podmienia dane przy każdej nawigacji/reload).
+- **Testy mobile**: `hasTouch: true` (nie `isMobile` — quirk headless Chromium w Playwright).
+
+### 11.4 Artefakty i debug — repo czyste na końcu sesji
+
+- **Screenshoty debug (PNG)** zapisuj poza repo (np. `/tmp/opencode`) albo usuwaj od razu — nie wolno trzymać `*.png` w root ani śledzonych PNG w repo (sprzątanie 2026-10-09: 11+ usuniętych). `.gitignore` ma reguły (`/e2e-*.png` i podobne).
+- Po sesji debug **usuń pliki debug** (np. tymczasowe specy `dbg-*.spec.ts`) albo zamień w normalne testy.
+- Przed każdym pushem: `git status --short` — bez przypadkowych artefaktów (`??`) w root.
+
+### 11.5 Debugging — metodologia
+
+- Kolejność diagnozy: (1) odtwórz na **bazowym commicie** (osobny worktree) — jeśli pada, to **pre-existing**, nie regresja; (2) dopiero potem szukaj przyczyny w merge (incydent: `snap-vertex` podejrzewano o regresję z 3 równoległych merge'y, a padał też na bazie).
+- Zapisuj postęp w `coordination/STATUS.md` — co ustalone, co nie pomogło (żeby następny agent nie przeżuwał tego samego).
+- Live debugging na srv01: bundle PWA bywa stale w przeglądarce — **weryfikuj hash serwowany vs kontener** (`docker exec wycinka-web-1 grep -oE "/assets/index-[A-Za-z0-9_-]+\\.js" /usr/share/nginx/html/index.html`), potem CDP `Network.clearBrowserCache` + reload.
+
+### 11.6 Deployment i dane
+
+- **PMTiles**: poprawny plik zaczyna się magic `PMTiles` (weryfikacja `xxd | head -1`). `tippecanoe < 3.x` produkuje **MBTiles (SQLite)** — każdy run pipeline MUSI przejść przez `/tmp/pmtiles convert` (go-pmtiles ≥1.31, binary w obrazie ETL).
+- **srv01**: projekt w `/opt/wycinka`; env backendu — `WYCINKA_DB_PATH=/app/data/sqlite/parcels.sqlite`, `WYCINKA_PMTILES_PATH=/app/data/pmtiles/dzialki.pmtiles` (NIE `/app/data/parcels.sqlite`).
+- **Auth**: basic auth w Caddy; curl z `-u wycinka:wycinka-demo-2026`; hash w `infra/.env` z `$$` escaping. Nowy profil przeglądarki = `httpCredentials` w kontekście Playwright (albo zaloguj ręcznie).
+- Volume `wycinka_api-data` = dane RAW + TILES — rsync backup po każdym pełnym syncu.
+
+### 11.7 Frontend — UI i komponenty
+
+- **UI wyłącznie po polsku** — copy, toasty, error messages, fixtures E2E (achievements/labels PL — patrz §1).
+- **`data-testid`: kebab-case** jako stabilne hooki E2E/unit (`fab-add-tree`, `panel-save`, `pdf-export-generate`, `parcel-card`, `pending-position`, `add-parcel-to-project`). Nowy interaktywny element = testid + accessible name po polsku.
+- **Touch target ≥ 44px** (`h-11`/`w-11`) na każdy click target.
+- **Modal/dialog overflow**: zawsze `max-h-[85vh]` + footer poza scrollem (wzór: panel `flex max-h-[85vh] flex-col`, body `min-h-0 flex-1 overflow-y-auto`; footer `shrink-0`). Incydent: „Generuj PDF" poza viewportem przy podglądzie SVG.
+- **Dexie**: każda zmiana schematu = **nowy numer wersji + migracja** (`v3` → `project_parcels`, limit 20 działek/projekt). Nigdy nie modyfikuj istniejącej wersji.
+
+### 11.8 Git — doprecyzowanie §4.4
+
+- Commity atomowe; przy większych zmianach: `feat:` (kod), `test:` (testy), `docs(coordination): STATUS` na końcu.
+- **Subagent** nie merguje do main — zostawia branch dla nadzorcy.
+- CI: po merge nadzorca odpala `gh run list` / `gh run view <id> --log-failed`; poprawki CI (`fix(ci):`) pushuj natychmiast — każdy push na main uruchamia run.
+
 **Powodzenia. Pisz czytelny kod, testuj wszystko, nie psuj innym buildów.**
