@@ -50,9 +50,12 @@ services:
       - wycinka-net
 
   caddy:
-    build: ./caddy
-    image: wycinka-caddy:${IMAGE_TAG:-latest}
+    # Stock caddy + entrypoint.sh z repo (rendering APP_ENV → snippety w Caddyfile).
+    # Custom build z pluginem cloudflare-dns wróci przy wystawianiu do internetu
+    # (auto-HTTPS z DNS challenge); dla LAN/LP/WLAN stock wystarczy.
+    image: caddy:2.10.0-alpine
     restart: unless-stopped
+    entrypoint: ["/usr/local/bin/entrypoint.sh", "run", "--config", "/tmp/Caddyfile.rendered", "--adapter", "caddyfile"]
     environment:
       DOMAIN: ${DOMAIN:-wycinka.app}
       APP_ENV: ${APP_ENV:-production}
@@ -67,6 +70,7 @@ services:
       - "443:443"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
       - caddy-data:/data
       - caddy-config:/config
     networks:
