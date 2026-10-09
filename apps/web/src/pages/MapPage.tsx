@@ -51,7 +51,9 @@ export default function MapPage(): JSX.Element {
   const setListPanelOpen = useTreeStore((s) => s.setListPanelOpen);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
 
-  const { position, error: gpsError, loading: gpsLoading, refresh } = useGeolocation();
+  const { position, error: gpsError, loading: gpsLoading, refresh } = useGeolocation({
+    averagingSamples: mode === 'idle' ? 1 : 5,
+  });
 
   useEffect(() => {
     void loadProjects();
