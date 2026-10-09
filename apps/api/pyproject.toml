@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.8.0",
     "pydantic-settings>=2.4.0",
     "structlog>=24.4.0",
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]
@@ -59,7 +60,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S", "B008", "N802", "N803"]
+"tests/**/*.py" = ["S", "B008", "N802", "N803", "ASYNC240"]
 "app/services/parcel_service.py" = ["S608"]
 "app/api/pmtiles.py" = ["ASYNC240"]
 "app/api/health.py" = ["ASYNC240"]
