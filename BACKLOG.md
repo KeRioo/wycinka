@@ -1,7 +1,7 @@
 # BACKLOG — wycinka.app
 
 > **Aktualizowane przez nadzorcę.** Snapshot stanu projektu, znalezione problemy i kolejne kamienie milowe.
-> Ostatnia aktualizacja: 2026-10-01 (po merge TreeListPanel + marker popup).
+> Ostatnia aktualizacja: 2026-10-09 (po merge M5 + M8 + M9).
 >
 > **Przeczytaj najpierw:** `README.md` → `AGENTS.md` → `PLAN.md` → `coordination/STATUS.md`.
 
@@ -44,9 +44,9 @@ Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
 
 | # | Problem | Gdzie | Co zrobić |
 |---|---|---|---|
-| 1 | **Frontend `Parcel` type** nie ma pól `voivodeship_code`, `county_code`, `commune_code`, `datasource` — backend je zwraca, frontend je ignoruje (extra fields allowed przez TS, ale UI ich nie pokazuje) | `apps/web/src/services/api.types.ts` | Dodać brakujące pola do interface `Parcel`, opcjonalnie wyświetlić w `ParcelPopup` |
-| 2 | **ETL nie jest w docker-compose** — działa standalone albo jako cron. Brakuje definicji serwisu i zależności czasowych | `infra/docker-compose.yml` | Dodać serwis `etl` z `cron`, volume `api-data`, network `internal`. Rozważ `nominatim.org` rate-limit |
-| 3 | **Caddy CORS** ustawiony na `Access-Control-Allow-Origin: *` — niebezpieczne w prod | `infra/caddy/Caddyfile` | Dodać env-driven origin (placeholder `<FRONTEND_ORIGIN>`), fallback w dev |
+| 4 | **Bug triggery `parcels_rtree_delete`** — wpis w `parcels_rtree` zostaje orphanem po DELETE działki (SELECT idzie po usunięciu wiersza mapy). Nie łamie wyników (join przez mapę), ale wymaga fixu w `app/core/db.py` + migracji | `apps/api/app/core/db.py`, migracja | Zamienić kolejność / stash `rtree_id` przed delete; nowa migracja Alembic |
+| 5 | **Frontend `Parcel` type** nie ma pól `voivodeship_code`, `county_code`, `commune_code`, `datasource` — backend je zwraca, frontend je ignoruje (extra fields allowed przez TS, ale UI ich nie pokazuje) | `apps/web/src/services/api.types.ts` | Dodać brakujące pola do interface `Parcel`, opcjonalnie wyświetlić w `ParcelPopup` |
+| 6 | **ETL nie jest w docker-compose jako scheduled job z realną komendą** — serwis `etl` dostarczony (M9), ale wymaga realnego URL GUGiK i `ETL_POWIAT` w env | `infra/docker-compose.yml` | M10 — real data integration |
 
 ### 🟡 Średni priorytet (UX)
 
@@ -72,17 +72,18 @@ Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
 - Testy: 4 E2E (`tree-list.spec.ts`), 212 unit. Coverage 90.1%.
 - Commit: merge `0e40999` → main.
 
-### Milestone 5 — Kreator PDF
-- **Estymata:** 4-6h
-- **Scope:** PLAN §4.F
-- **Stack:** `jsPDF` + `html2canvas` (potrzebny `npm install jspdf html2canvas`)
-- **Layout options:** single / combined / one-per-page (per `project.pdfPrefs.layout`)
-- **Marker scaling:** kolor wg gatunku, rozmiar wg obwodu (`pdfPrefs.markerScale`)
-- **Map auto-rotate:** 0-90° w 15° krokach → bbox → wybór min. pola
-- **Compass:** SVG overlay na mapie (północ prawdziwa)
-- **Table:** gatunek × przedziały obwodów + opcjonalnie numbered full list
-- **Agent:** frontend
-- **Branch:** `feat/frontend-pdf`
+### ✅ Milestone 5 — Kreator PDF (DOSTARCZONE 2026-10-09)
+- jsPDF (wektorowo, bez html2canvas): layouty single/combined/one-per-page, markery kolor=gatunek/rozmiar=obwód, kompas SVG, auto-obrót 0–85°, tabela zbiorcza (gatunek × przedziały §8.5) + numerowana lista, dialog `PdfExportDialog` na MapPage.
+- Testy: 55 nowych unit → **267/267 pass**; coverage **91.44%** lines (moduł pdf: 97.18%).
+
+### ✅ Milestone 8 — Backend polish (DOSTARCZONE 2026-10-09)
+- Alembic migrations (`0001_initial_schema` — DDL z `app/core/db.py`, jedno źródło prawdy), `/api/v1/sync/trigger` (202/409/400/503), `/api/v1/sync/status`, prod logging → `wycinka.log` (JSON).
+- Testy: **72/72 pass** ( +17 ); coverage **88%**; ruff clean.
+- Kontrakt: sekcja 5 `/sync/*` dopisana do `docs/api-contract.md` przez nadzorcę.
+
+### ✅ Milestone 9 — Infra ETL cron + runbook (DOSTARCZONE 2026-10-09)
+- Serwis `etl` w docker-compose (tippecanoe 2.79.0 build-from-source, non-root uid 1000, healthcheck freshness, volume `api-data`), sleep-based scheduler (`ETL_INTERVAL_SECONDS`/run-once), `infra/operational-runbook.md`.
+- Testy: **51/51** walidacji OK (2 skip — brak Dockera). `WYCINKA_SYNC_COMMAND` podpięty w compose (env).
 
 ### Milestone 6 — Per-project configuration UI
 - **Estymata:** 2-3h
@@ -97,18 +98,6 @@ Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
 - **Stack:** Dexie → JSON serializacja (bez Geometry → string), upload pliku, merge vs overwrite
 - **Agent:** frontend
 - **Branch:** `feat/frontend-backup-restore`
-
-### Milestone 8 — Backend polish
-- **Estymata:** 3-4h
-- **Scope:** Alembic migrations, endpoint `/sync/trigger`, `/sync/status`, logi do osobnego pliku
-- **Agent:** backend
-- **Branch:** `feat/backend-migrations-sync-api`
-
-### Milestone 9 — Infra: ETL as cron container + runbook
-- **Estymata:** 2-3h
-- **Scope:** issues #2, dodać `infra/scripts/operational-runbook.md` (deploy, rollback, monitoring, troubleshooting)
-- **Agent:** infra
-- **Branch:** `feat/infra-etl-cron-runbook`
 
 ### Milestone 10 — Real EGiB data integration
 - **Estymata:** 4-8h (wymaga pobrania + przetworzenia)
@@ -201,4 +190,4 @@ python -m egib_sync --help  # CLI
 
 ---
 
-**Kolejny krok:** Milestone 5 (Kreator PDF) — główna funkcja eksportu, ~4-6h. Branch `feat/frontend-pdf`.
+**Kolejny krok:** Milestone 7 (Backup/restore JSON) → Milestone 6 (Per-project config UI) → Milestone 10 (Real EGiB data). Następnie przegląd issues Wysokiego priorytetu (#4 rtree_delete orphan, #6 CORS).

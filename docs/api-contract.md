@@ -227,7 +227,35 @@ const map = new maplibregl.Map({
 
 ---
 
-## 5. Kody błędów (jednolite dla wszystkich endpointów)
+## 5. Sync ETL
+
+### `POST /api/v1/sync/trigger`
+
+Odpala import EGiB asynchronicznie (subprocess ETL) i natychmiast zwraca status.
+
+**Response:**
+- `202 Accepted` — `{"status": "running", "started_at": "...", "message": "..."}`
+- `409 Conflict` — `{"error": "...", "code": "SYNC_ALREADY_RUNNING", "details": {}}` — sync już trwa
+- `400 Bad Request` — `{"error": "...", "code": "SYNC_NOT_CONFIGURED", "details": {}}` — `WYCINKA_SYNC_COMMAND` pusta
+- `503 Service Unavailable` — `{"error": "...", "code": "DB_UNAVAILABLE", "details": {}}`
+
+### `GET /api/v1/sync/status`
+
+**Response 200:**
+```json
+{
+  "status": "running",
+  "running": true,
+  "started_at": "2026-10-09T12:00:00Z",
+  "finished_at": null,
+  "last_sync": "2026-10-02T04:00:00Z",
+  "error": null
+}
+```
+- `status`: `running | success | error | unknown` (źródło: `sync_meta`)
+- `503` gdy baza niedostępna
+
+## 6. Kody błędów (jednolite dla wszystkich endpointów)
 
 ```json
 {
@@ -254,7 +282,7 @@ const map = new maplibregl.Map({
 
 ---
 
-## 6. Limity i rate limiting
+## 7. Limity i rate limiting
 
 - **Max 60 req/s per IP** (zwraca `429 Too Many Requests`)
 - **Max 100 000 punktów** w jednym `aggregate`
@@ -263,14 +291,14 @@ const map = new maplibregl.Map({
 
 ---
 
-## 7. Wersjonowanie
+## 8. Wersjonowanie
 
 - URL path: `/api/v1` (breaking changes = `/api/v2`)
 - Header: `API-Version` (opcjonalnie, klient może sprawdzić)
 
 ---
 
-## 8. Uwagi implementacyjne
+## 9. Uwagi implementacyjne
 
 - **`/parcel?lat&lng` zwraca 200 + `{"found": false}`** — nawet gdy nic nie znaleziono. Jest to flow „interactive map", więc brak wyniku nie jest błędem.
 - **`/parcel/{teryt}` zwraca 404** gdy działka nie istnieje — TERYT jest identyfikatorem, więc brak jest błędem.
@@ -278,7 +306,7 @@ const map = new maplibregl.Map({
 - **Range requests dla PMTiles:** backend honoruje `Range: bytes=START-END`, `Range: bytes=START-`, `Range: bytes=-SUFFIX`. Zwraca `416` dla nieparsowalnego lub niespełnialnego range.
 - **ETag dla PMTiles:** hash pliku (mtime + size). Frontend może używać `If-None-Match` do warunkowego cache'owania.
 
-## 9. Przykłady curl
+## 10. Przykłady curl
 
 ```bash
 # Health
@@ -298,4 +326,8 @@ curl "http://localhost:8000/api/v1/parcel/aggregate?id=141201_1.0001.6509,141201
 
 # PMTiles (pierwszy MB)
 curl -H "Range: bytes=0-1048576" http://localhost:8000/api/v1/pmtiles/dzialki -o partial.pmtiles
+
+# Sync ETL
+curl -X POST http://localhost:8000/api/v1/sync/trigger
+curl http://localhost:8000/api/v1/sync/status
 ```
