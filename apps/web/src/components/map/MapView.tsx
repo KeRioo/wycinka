@@ -19,6 +19,7 @@ interface MapViewProps {
   initialCenter?: readonly [number, number];
   initialZoom?: number;
   highlightGeometry?: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
+  projectParcelsGeometry?: GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon> | null;
   treeLayer?: GeoJSON.FeatureCollection<GeoJSON.Point, TreeFeatureProperties> | null;
   onMapClick?: (point: { lat: number; lng: number }) => void;
   onMapReady?: (map: MaplibreMap) => void;
@@ -71,6 +72,10 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       },
+      parcels: {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      },
       'snap-indicator': {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -98,6 +103,24 @@ function buildStyleWithPMTiles(pmtilesUrl: string): maplibregl.StyleSpecificatio
           'line-color': '#15803d',
           'line-width': 0.5,
           'line-opacity': 0.7,
+        },
+      },
+      {
+        id: 'parcels-fill',
+        type: 'fill',
+        source: 'parcels',
+        paint: {
+          'fill-color': '#166534',
+          'fill-opacity': 0.15,
+        },
+      },
+      {
+        id: 'parcels-outline',
+        type: 'line',
+        source: 'parcels',
+        paint: {
+          'line-color': '#1e3a8a',
+          'line-width': 2,
         },
       },
       {
@@ -194,6 +217,7 @@ export default function MapView({
   initialCenter = DEFAULT_CENTER,
   initialZoom = DEFAULT_ZOOM,
   highlightGeometry,
+  projectParcelsGeometry,
   treeLayer,
   onMapClick,
   onMapReady,
@@ -308,6 +332,18 @@ export default function MapView({
       source.setData({ type: 'FeatureCollection', features: [] });
     }
   }, [highlightGeometry, styleLoaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleLoaded) {
+      return;
+    }
+    const source = map.getSource<maplibregl.GeoJSONSource>('parcels');
+    if (!source) {
+      return;
+    }
+    source.setData(projectParcelsGeometry ?? { type: 'FeatureCollection', features: [] });
+  }, [projectParcelsGeometry, styleLoaded]);
 
   useEffect(() => {
     const map = mapRef.current;
