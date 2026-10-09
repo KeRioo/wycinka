@@ -1,25 +1,30 @@
 # BACKLOG — wycinka.app
 
 > **Aktualizowane przez nadzorcę.** Snapshot stanu projektu, znalezione problemy i kolejne kamienie milowe.
-> Ostatnia aktualizacja: 2026-10-09 (po merge M5 + M8 + M9).
+> Ostatnia aktualizacja: **2026-10-09 (wieczór)** — 4 gałęzie zmergowane (search-ui, rename-project, map-layer-perf, pdf-layout), CI partial-fix; snapshoty PNG posprzątane z repo.
 >
 > **Przeczytaj najpierw:** `README.md` → `AGENTS.md` → `PLAN.md` → `coordination/STATUS.md`.
 
 ---
 
-## 1. Stan projektu (2026-10-01)
+## 1. Stan projektu (2026-10-09 wieczór)
 
-### Co jest zmergowane do `main`
+### Co jest zmergowane do `main` (dzisiaj, 2026-10-09)
 
-| Moduł | Co dostarczone | Coverage | Testy |
+| Merge | Branch | Co dostarczone | Wyniki |
 |---|---|---|---|
-| **Backend** (`apps/api/`) | FastAPI + async aiosqlite + R-tree map pattern + WKT parser (hypothesis) + PMTiles Range/ETag/CORS | 86% | 55/55 ✓ |
-| **Frontend** (`apps/web/`) | Vite+React+TS strict + ky + MapLibre PMTiles + Dexie + FAB + tree capture + TreeListPanel + marker popup + 17 gatunków PL | 90.1% | 212/212 ✓ |
-| **Infra** (`infra/`) | docker-compose prod+dev, Caddy z PMTiles Range, nginx alt, cloudflared config, scripts | — | 31/33 (2 skipped — brak docker/caddy CLI) |
-| **ETL** (`scripts/sync-egib/`) | Downloader+merger+pmtiles_gen+sqlite_loader+pipeline (atomicity/rollback)+CLI | 93.9% | 143/143 ✓ |
-| **Docs** | `docs/api-contract.md` + `docs/data-schema.md` zsynchronizowane z implementacją (commit `2bebd98`) | — | — |
+| `8cd0f41` | `feat/rename-project` | Rename projektu (dialog ✏️ na /projects, walidacja zod 1–100 znaków, toast PL), „Nowy projekt" z polem nazwy, fixture `minimal.pmtiles` zcommitowany (`-f`) | unit 437/437, coverage 93%, e2e 26/26 |
+| `f216740` | `feat/search-ui` | **SearchBox TERYT** w Headerze (debounce 500 ms, min 2 znaki, max 10 wyników, keyboard/ESC, badge „w projekcie", flyTo na centroid), healthcheck PMTiles HEAD→GET (`Range: bytes=0-0`, fix 405) | unit 436/436, coverage 92.9%, e2e 30/30 |
+| `72be05e` | `fix/map-layer-perf` | **Perf mapy**: styl do `mapStyle.ts`, `dzialki-outline` minzoom **15** (~500 m skali), `dzialki-fill` minzoom **17** (niżej tylko obrys — koniec „zielonego pola"); highlight/parcels bez kapu | unit 430/430, e2e 30/31 (1 pre-existing flake) |
+| `9da58db` | `fix/pdf-layout` | **PDF naprawiony**: projekcja w km z korektą cos(lat) (był rozjazd E–W ~1,55×), paginacja tabel (limit 275 mm, „cd."), kompas bez odbicia lustrzanego, clamp markerów, **podgląd SVG str. 1 w dialogu** | unit 444/444, coverage 92.8% |
 
-Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
+**Po integracji na main:** typecheck ✓, lint ✓, **unit 475/475 (48 plików)** ✓, build ✓, e2e 34/37 (3 fails — patrz §2.2)
+
+### Deployment srv01 (stan z popołudnia — przed dzisiejszym merge)
+
+- `https://wycinka.app` działa: basic auth (`wycinka`/`wycinka-demo-2026`), TLS, tunel, PMTiles Range 206 (magic `PMTiles`), EGiB powiat otwocki (178 099 działek, GPKG `1417.gpkg.zip` z opendata.geoportal.gov.pl — kanał fallback po outage WFS GUGiK)
+- **Kontener web ma STARY build** (przed dzisiejszymi merge'ami) — **wymaga redeploy** patrz §3 "Najbliższe kroki"
+- Zweryfikowane live: `/api/v1/parcel` 200/found (Józefów), `/api/v1/search` 10 hits, klik w działkę → request + karta (happy-path z fitBounds)
 
 ### Workflow pracy (sprawdzony)
 
@@ -44,66 +49,48 @@ Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
 
 | # | Problem | Gdzie | Co zrobić |
 |---|---|---|---|
-| 4 | **Bug triggery `parcels_rtree_delete`** — wpis w `parcels_rtree` zostaje orphanem po DELETE działki (SELECT idzie po usunięciu wiersza mapy). Nie łamie wyników (join przez mapę), ale wymaga fixu w `app/core/db.py` + migracji | `apps/api/app/core/db.py`, migracja | Zamienić kolejność / stash `rtree_id` przed delete; nowa migracja Alembic |
-| 5 | **Frontend `Parcel` type** nie ma pól `voivodeship_code`, `county_code`, `commune_code`, `datasource` — backend je zwraca, frontend je ignoruje (extra fields allowed przez TS, ale UI ich nie pokazuje) | `apps/web/src/services/api.types.ts` | Dodać brakujące pola do interface `Parcel`, opcjonalnie wyświetlić w `ParcelPopup` |
-| 6 | **ETL nie jest w docker-compose jako scheduled job z realną komendą** — serwis `etl` dostarczony (M9), ale wymaga realnego URL GUGiK i `ETL_POWIAT` w env | `infra/docker-compose.yml` | M10 — real data integration |
+| A | **CI czerwone na main (2 z 3 przyczyn naprawione, commit `7cd7380`)** — (1) job Infra: `pip install pyyaml` (fix w workflow, czeka na push/run), (2) job E2E: fixture `minimal.pmtiles` brakował → **zcommitowany** przez rename (129 B), (3) ~~E2E~~ — patrz #B | `.github/workflows/ci.yml` | Push main → sprawdzić run → jak E2E dalej czerwony, wyłączyć… patrz #B |
+| B | **E2E `snap-vertex.spec.ts:149` pada DETERMINISTYCZNIE także na bazowym `297bb5b`** (sprawdzone worktree /root/wt-base po restore) — **pre-existing, nie regresja z merge'y**. Diagnoza na dziś: `usePendingDrag` startuje drag tylko na `map.on('mousedown','trees-pending-circle')`, a `queryRenderedFeatures` na pozycji pinezki zwraca **pusto** mimo panelu otwartego (drzewo pending widać w panelu "Pozycja 52.22970…"). Debug spec (dbg-snap) pokazał `trees-pending-circle` bez hit-testów. Podejrzenia: (a) warstwa GeoJSON pending nie ma features w momencie kliku (timing efektu setData vs `styleLoaded`), (b) mapa remountuje się i `wycinkaMap` pokazuje stary obiekt, (c) warstwa nie-queryable. **Nie deployować z tym testem w CI bez vurify** | `apps/web/tests/e2e/snap-vertex.spec.ts`, `src/components/map/usePendingDrag.ts` | Agent debug (frontend): confirm whether treeLayer `setData` runs; ewentualnie test przełączony na drag przez maplibre Marker bez query; baseline 297bb5b dobrze działa ręcznie? |
+| C | **Multi-parcel E2E kosztowny lottery** — `multi-parcel.spec.ts:120` "add two parcels" wymagał klikania po mapie + PDF dialog scroll overflow; **dialog naprawiony** (commit `7cd7380`: `max-h-[85vh]` + scroll body), test znów green. Został flake „remove button" | `apps/web/src/components/pdf/PdfExportDialog.tsx` | Po push — observe CI 2–3 runs |
+| D | **E2E `settings` backup roundtrip** flaky (padł w pełnym run, green w pojedynczym) — podejrzenie zależność IndexedDB między specami (deleteDatabase) | `apps/web/tests/e2e/settings.spec.ts:132` | Izolacja: kontekst per test / storageState |
+| E | **srv01 nie ma dziś builda z multi-parcel + dzisiejszych fixów** — live demo użytkownika może mylić (karta po kliku działa w happy-path, ale agregat/searchbox/perf nie) | srv01 `/opt/wycinka` | Redeploy z nowego main (patrz §3) |
 
-### 🟡 Średni priorytet (UX)
+### 🟡 Średni priorytet (UX / jakość)
 
 | # | Problem | Gdzie | Co zrobić |
 |---|---|---|---|
-| 6 | **Prawdziwe PNG ikony PWA** — są SVG placeholdery (192×192, 512×512) | `apps/web/public/icons/` | Designer/agent UI: wyeksportować PNG z figmy lub zamienić SVG → PNG (sharp, pngcrush) |
+| F | **Rename projektu / create dialog — „Mój pierwszy projekt" default** — działa, przetestowane; TODO: poprawić copy na nie-mobilnych (margin dialogu) | `apps/web/src/pages/ProjectsPage.tsx` | Poler przy okazji |
+| G | **SearchBox — brak debounce-owej request canceli między komponentami** (ok w SearchBox przez request-id guard); wynik click przechodzi przez `GET /api/v1/parcel/{teryt}` — **backend obsługuje tylko point-query** (workaround: teryt → szukamy przez aggregate /☐?) — działa bo backend ma `/parcel?teryt=` param? **TODO vurify** — jak backend nie ma by-teryt endpoint, search-nav uç E2E karena mock bypass — pokryć na live | `apps/web/src/lib/search.ts`, `apps/api/app/routes/parcel.py` | Sprawdzić 404 response real backend, w razie czego endpoint by-teryt |
+| H | **Prawdziwe PNG ikony PWA** — nadal SVG placeholdery (192×192, 512×512) | `apps/web/public/icons/` | Designer/agent UI: wyeksportować PNG (sharp) |
+| I | **MapView/TreeMarkers coverage gap** — vitest mockuje maplibre-gl (~49%/28%); mapStyle.ts pokryty 100% (wydzielony przez map-perf) | `apps/web/src/components/map/` | Zostawić (E2E pokrywa) |
+| J | **Hold-to-repeat w ArrowPad** nie testowany E2E | `apps/web/src/components/trees/ArrowPad.tsx` | Playwright: hold → 5 strzałów → offset |
+| K | **GPS averaging** — PLAN §6.2 (mediana z N) — bufor działa dla 5 sample przy placing, brakuje w idle GPS pipe | `apps/web/src/hooks/useGeolocation.ts` | Opcja `averagingSamples` |
 
 ### 🟢 Niski priorytet (nice-to-have)
 
 | # | Problem | Gdzie | Co zrobić |
 |---|---|---|---|
-| 7 | **MapView/TreeMarkers coverage gap** — vitest mockuje maplibre-gl, więc coverage ~49%/28% choć E2E pokrywa te ścieżki | `apps/web/src/components/map/MapView.tsx` (49%), `TreeMarkers.tsx` (28%) | Test integracyjny z prawdziwym `maplibregl.Map` (jsdom + canvas mock) lub zaakceptować obecny stan i zostawić notatkę |
-| 8 | **Hold-to-repeat** w ArrowPad działa, ale nie jest testowane E2E (tylko unit) | `apps/web/src/components/trees/ArrowPad.tsx` | Dodać Playwright test: przytrzymaj → 5 strzałów → offset += 1.25 m |
-| 9 | **GPS averaging** — obecnie bierze ostatni fix. PLAN §6.2 przewiduje uśrednianie N odczytów (dryf) | `apps/web/src/hooks/useGeolocation.ts` | Dodać opcję `averagingSamples?: number` — buforuje N ostatnich, zwraca medianę |
-| 10 | **Snap-to-vertex** w PAN §4.D: "Bezpośrednio na mapie (przeciągnięcie pinezki)" | `apps/web/src/components/trees/` | Drag handler w `TreeMarkers` (maplibre-gl supports drag), snap opcjonalnie z `SnapToPoint` ULDK |
+| L | **Snapshot rendering mapy (PMTiles compare)** — brak wizualnych regression testów | `tests/` | Playwright screenshot diff na mockowanym tile (opcja) |
+| M | **E2E multi-parcel — agent zaleca migrację na drag-mapę (nie click fixed coords)** | `apps/web/tests/e2e/multi-parcel.spec.ts` | Refactor testu po puszczeniu #B |
 
 ---
 
-## 3. Następne kamienie milowe (z PLAN.md)
+## 3. Milestony — status
 
-### ✅ Milestone 4 — TreeListPanel + marker popup (DOSTARCZONE 2026-10-01)
-- Dostarczone: `TreeListPanel.tsx` (drawer z listą: gatunek/obwód/data + edytuj/usuń), `TreePopup.tsx` (popup w maplibre), toggle button, `treeStore` state (`selectedTreeId`, `listPanelOpen`), fix tree-layer rendering filter.
-- Testy: 4 E2E (`tree-list.spec.ts`), 212 unit. Coverage 90.1%.
-- Commit: merge `0e40999` → main.
+### ✅ Milestone 4 — TreeListPanel + marker popup (DOSTARCZONE)
+### ✅ Milestone 5 — Kreator PDF (DOSTARCZONE 2026-10-09; **rozszerzone fix/pdf-layout**: km-projekcja, paginacja, kompas, podgląd SVG)
+### ✅ Milestone 6 — Per-project configuration UI (DOSTARCZONE)
+### ✅ Milestone 7 — Backup/restore JSON (DOSTARCZONE)
+### ✅ Milestone 8 — Backend polish (DOSTARCZONE)
+### ✅ Milestone 9 — Infra ETL cron + runbook (DOSTARCZONE)
+### ✅ Milestone 10 — Real EGiB data (DOSTARCZONE — GPKG powiat otwocki, opendata fallback)
+### ✅ Dodatkowe (2026-10-09): multi-parcel, mobile bottom-sheet, GPS averaging, snap-to-vertex, fitBounds, SearchBox TERYT, rename projektu, map layer perf, PDF fix
 
-### ✅ Milestone 5 — Kreator PDF (DOSTARCZONE 2026-10-09)
-- jsPDF (wektorowo, bez html2canvas): layouty single/combined/one-per-page, markery kolor=gatunek/rozmiar=obwód, kompas SVG, auto-obrót 0–85°, tabela zbiorcza (gatunek × przedziały §8.5) + numerowana lista, dialog `PdfExportDialog` na MapPage.
-- Testy: 55 nowych unit → **267/267 pass**; coverage **91.44%** lines (moduł pdf: 97.18%).
-
-### ✅ Milestone 8 — Backend polish (DOSTARCZONE 2026-10-09)
-- Alembic migrations (`0001_initial_schema` — DDL z `app/core/db.py`, jedno źródło prawdy), `/api/v1/sync/trigger` (202/409/400/503), `/api/v1/sync/status`, prod logging → `wycinka.log` (JSON).
-- Testy: **72/72 pass** ( +17 ); coverage **88%**; ruff clean.
-- Kontrakt: sekcja 5 `/sync/*` dopisana do `docs/api-contract.md` przez nadzorcę.
-
-### ✅ Milestone 9 — Infra ETL cron + runbook (DOSTARCZONE 2026-10-09)
-- Serwis `etl` w docker-compose (tippecanoe 2.79.0 build-from-source, non-root uid 1000, healthcheck freshness, volume `api-data`), sleep-based scheduler (`ETL_INTERVAL_SECONDS`/run-once), `infra/operational-runbook.md`.
-- Testy: **51/51** walidacji OK (2 skip — brak Dockera). `WYCINKA_SYNC_COMMAND` podpięty w compose (env).
-
-### Milestone 6 — Per-project configuration UI
-- **Estymata:** 2-3h
-- **Scope:** PLAN §4.E
-- **Features:** edycja listy gatunków (kolory), edycja przedziałów obwodów, edycja PDF prefs
-- **Agent:** frontend
-- **Branch:** `feat/frontend-project-config`
-
-### Milestone 7 — Backup/restore JSON
-- **Estymata:** 2-3h
-- **Scope:** PLAN §4.H
-- **Stack:** Dexie → JSON serializacja (bez Geometry → string), upload pliku, merge vs overwrite
-- **Agent:** frontend
-- **Branch:** `feat/frontend-backup-restore`
-
-### Milestone 10 — Real EGiB data integration
-- **Estymata:** 4-8h (wymaga pobrania + przetworzenia)
-- **Scope:** ETL integration z prawdziwym URL GUGiK, pierwszy pełny sync dla 1 powiatu (np. Warszawa), walidacja całego pipeline
-- **Agent:** etl
-- **Branch:** `feat/etl-real-data`
+### Pozostały kamień milowy — Deployment & stabilizacja live (SRV01) ← DALEJ
+- **Estymata:** 2-4h
+- **Scope:** redeploy web+api z main `bf4a72e` (multi-parcel, searchbox, perf, PDF fix), zielone CI (`7cd7380` fix + push), ręczny happy-path na prodzkim URL, obserwacja CI 2-3 runs pod kątem flake (#B, #C, #D)
+- **Agent:** nadzorca (+ infra ewentualnie)
+- **Kroki:** (1) push main; (2) sprawdź CI; (3) ssh srv01 → `git pull && docker compose build web api && docker compose up -d`; (4) clearBrowserCache + rceed happy-path: klik działka → ➕ do projektu → chipsy → PDF; (5) searchbox TERYT na live działa (backend `/parcel?teryt` vurify)
 
 ---
 
@@ -111,35 +98,31 @@ Commit **F** używany w `Origin:` URL: `https://github.com/KeRioo/wycinka.git`.
 
 | Decyzja | Status | Uwagi |
 |---|---|---|
-| Map provider (PMTiles vs Leaflet) | ✅ PMTiles | Wybrane w PLAN §2 |
-| Backend self-hosted | ✅ FastAPI | Wybrane w PLAN §11 |
-| Domain | ❓ Niezdecydowane | `wycinka.app` nie jest zarejestrowane; planujemy `wycinka.panstwo.pl`? |
-| Cloudflare Tunnel | 🔄 Konfig gotowy | Wymaga konta Cloudflare + domeny |
-| Production server | ❓ Niezdecydowane | Hetzner VPS vs Raspberry Pi vs Cloudflare Pages |
-| Auth | ❓ Brak | MVP — brak logowania. Kiedy dodać? |
+| Map provider (PMTiles vs Leaflet) | ✅ PMTiles | PLAN §2 |
+| Backend self-hosted | ✅ FastAPI | PLAN §11 |
+| Domain | ✅ `wycinka.app` | Live, Cloudflare Tunnel |
+| Cloudflare Tunnel | ✅ Live na srv01 | Token `/root/.cloudflared-wycinka.token`, zone `wycinka.app` |
+| Production server | ✅ srv01 (192.168.10.212) | Docker 29 + Compose v2.39, `/opt/wycinka`, volumes `wycinka_api-data` |
+| Auth | ✅ Basic auth Caddy | user `wycinka`, hash w `/opt/wycinka/infra/.env` |
+| **Snap-to-vertex na desktopie** | ❓ Do przemyślenia | Panel „Dodaj drzewo" na desktopie = sidebar 22rem top-right (niechapuje mapy), a jednak E2E drag nie działa — bug w$query; czy drag pinezki desktop w ogóle jest w UX PLAN? Patrz #B |
+| **Publiczny rollout** | 🔄 Odroczony | Do endy po stabilizacji srv01; samo wystawienie Cloudflare gotowe |
 
 ---
 
-## 5. Środowisko deweloperskie (znane ograniczenia)
+## 5. Środowisko deweloperskie (stan 2026-10-09 / Linux srv)
 
-### Windows + OneDrive problem
+### Git worktrees (sprawdzony workflow)
 
-- **OneDrive sync** trzyma pliki → `coverage\.tmp` EPERM przy `npm run test:coverage` (OneDrive nie pozwala na rmdir). Workaround: ignoruj ostrzeżenie, raport coverage i tak się tworzy.
-- **Ścieżki z polskimi znakami** (`Polska Agencja Żeglugi Powietrznej`) — czasem problematyczne dla ESLint cache. Rozwiązanie: sklonuj repo do katalogu bez spacji.
-- **PowerShell 5.1** (nie Core) — `&&` nie działa, używaj `; if ($?) { ... }`.
+- Subagenci: `git worktree add ../wt-<modul> -b feat/<modul>` — każdy agent ma swój katalog, zero konfliktów. Dzisiaj 4 agentów równolegle na worktree — **bez jednego konfliktu kodowego** (jedyny konflikt: `coordination/STATUS.md`, ręcznie scalony przez nadzorcę).
+- Po merge: `git worktree remove ../wt-<modul> --force` + `git branch -d <branch>`. **Zostają stare worktree** `/root/wt-backend-fix`, `/root/wt-frontend-main`, `/root/wt-infra-auth` (stare sprawy, do weryfikacji/jeszcze przydatne? iwypo — do opróżnienia).
+- **Przypadkowe reformatowanie**: agent uruchomił `prettier --write` na całości — sięgnęło 60+ plików (głównie whitespace). Cofnięte z merge'a przez `--ignore-all-space` weryfikację. **Reguła dla agentów: nie formatuj plików poza swoim scope.**
 
-### Brak Dockera na dev PC
+### Playwright (E2E) znane cechy
 
-- `infra/` walidowane przez testy (compose YAML parse, caddy validate), nie przez `docker compose up`
-- `apps/api/Dockerfile` budowane ręcznie tylko gdy user ma Linux/Mac lub inny PC
-- E2E Playwright odpalane lokalnie, integracja z backendem przez mocki (MSW)
-
-### Git workflow uwaga
-
-- **Subagenci mogą pracować równolegle** na tym samym checkout → utrata plików working tree (incident podczas infra scaffold). Rozwiązania:
-  - `git worktree add ../wycinka-<branch> feat/<branch>` — każdy agent ma swój katalog
-  - Lub sekwencjonowanie (każdy agent ma wyłączność do swojego katalogu)
-- **Coordinator**: preferuj worktree dla bezpieczeństwa
+- **Fixture `tests/e2e/fixtures/minimal.pmtiles`** — ZIP gitignored (`*.pmtiles`); **zcommitowany z `-f`** (129 B syntetyczne v3). Jak zaginie: wygenerować albo pobrać `test_fixture_1.pmtiles` z protomaps/PMTiles `js/test/data` (468 B; pewny — snap waliduje).
+- **npm run test:e2e** wymaga `--config tests/e2e/playwright.config.ts` (baseURL 5173). Runtime na 5173; `E2E_PORT` env **nie działa** (hardcode PORT w config) — patrz problem kiedy uruchamiamy ręcznie bez skryptu (`npx playwright test tests/e2e/foo.spec.ts` bez `--config` → „Cannot navigate to invalid URL" dla relative goto).
+- **Flaky E2E**: `snap-vertex.spec.ts:149` (deterministycznie padający, pre-existing patrz #B), `settings.spec.ts:132` (backup roundtrip, flaky #D), `multi-parcel` „remove button" (flaky #C). Retries=1 maskuje częściowo.
+- **Desktop viewport 1280×720** — AddTreePanel = sidebar 22rem top-right (nie hamparza mapy po lewej). Mobile: bottom-sheet (drag close).
 
 ---
 
