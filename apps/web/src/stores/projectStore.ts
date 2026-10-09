@@ -1,22 +1,36 @@
 import { create } from 'zustand';
 import {
+  addParcelToProjectDb,
   createProject,
   deleteProject as deleteProjectFromDb,
+  listProjectParcels,
+  removeParcelFromProjectDb,
   listProjects,
+  MAX_PARCELS_PER_PROJECT,
   updatePdfPrefs as updatePdfPrefsInDb,
   updateRangesConfig as updateRangesConfigInDb,
   updateSpeciesConfig as updateSpeciesConfigInDb,
   type Project,
 } from '@/db/schema';
+import type { Parcel } from '@/services/api.types';
 
 export type ProjectLoadStatus = 'idle' | 'loading' | 'loaded' | 'error';
+
+const PARCEL_LIMIT_MESSAGE = `Limit ${String(MAX_PARCELS_PER_PROJECT)} działek na projekt`;
 
 interface ProjectState {
   activeProjectId: string | null;
   projects: Project[];
+  projectParcels: Parcel[];
   status: ProjectLoadStatus;
   error: string | null;
+  toast: string | null;
   loadProjects: () => Promise<void>;
+  loadProjectParcels: (projectId: string | null) => Promise<void>;
+  addParcelToProject: (parcel: Parcel, projectId?: string) => Promise<void>;
+  removeParcelFromProject: (teryt: string) => Promise<void>;
+  isParcelInProject: (teryt: string) => boolean;
+  setToast: (message: string | null) => void;
   setActive: (id: string | null) => void;
   createAndActivate: (name: string) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
@@ -31,8 +45,10 @@ interface ProjectState {
 export const useProjectStore = create<ProjectState>((set, get) => ({
   activeProjectId: null,
   projects: [],
+  projectParcels: [],
   status: 'idle',
   error: null,
+  toast: null,
 
   loadProjects: async () => {
     set({ status: 'loading', error: null });
@@ -54,6 +70,50 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const message = err instanceof Error ? err.message : 'Nieznany błąd ładowania projektów';
       set({ status: 'error', error: message });
     }
+  },
+
+  loadProjectParcels: async (projectId) => {
+    if (projectId === null) {
+      set({ projectParcels: [] });
+      return;
+    }
+    const rows = await listProjectParcels(projectId);
+    set({ projectParcels: rows.map((row) => row.snapshot) });
+  },
+
+  addParcelToProject: async (parcel, projectId) => {
+    const target = projectId ?? get().activeProjectId;
+    if (target === null) {
+      return;
+    }
+    if (get().projectParcels.some((p) => p.teryt === parcel.teryt)) {
+      return;
+    }
+    try {
+      await addParcelToProjectDb(target, parcel);
+      const rows = await listProjectParcels(target);
+      set({ projectParcels: rows.map((row) => row.snapshot) });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : PARCEL_LIMIT_MESSAGE;
+      set({ toast: message });
+    }
+  },
+
+  removeParcelFromProject: async (teryt) => {
+    const target = get().activeProjectId;
+    if (target === null) {
+      return;
+    }
+    await removeParcelFromProjectDb(target, teryt);
+    set((state) => ({ projectParcels: state.projectParcels.filter((p) => p.teryt !== teryt) }));
+  },
+
+  isParcelInProject: (teryt) => {
+    return get().projectParcels.some((p) => p.teryt === teryt);
+  },
+
+  setToast: (message) => {
+    set({ toast: message });
   },
 
   setActive: (id) => {
@@ -79,7 +139,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (wasActive) {
         nextActive = projects.length > 0 ? (projects[0]?.id ?? null) : null;
       }
-      return { projects, activeProjectId: nextActive };
+      return { projects, activeProjectId: nextActive, projectParcels: [] };
     });
   },
 
@@ -120,8 +180,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({
       activeProjectId: null,
       projects: [],
+      projectParcels: [],
       status: 'idle',
       error: null,
+      toast: null,
     });
   },
 }));
