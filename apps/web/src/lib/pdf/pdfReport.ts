@@ -8,7 +8,9 @@ import {
   chooseRotation,
   makeProjector,
   polygonPoints,
+  midLatOf,
   rotatePoints,
+  toKm,
   type LngLat,
   type Rect,
 } from './geometry';
@@ -66,6 +68,10 @@ export function buildParcelHeader(
 type OuterRing = LngLat[];
 
 type RingProjector = (lng: number, lat: number) => [number, number];
+
+export function clampInside(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
 
 function drawRingOutlines(doc: jsPDF, rings: readonly OuterRing[], project: RingProjector): void {
   rings.forEach((ring) => {
@@ -208,21 +214,25 @@ function drawMapSection(
   }
 
   const allPoints = rings.flat();
-  const rotationDeg = prefs.autoRotate ? chooseRotation(allPoints) : 0;
-  const bbox = bboxOf(allPoints);
-  const cx = (bbox.minX + bbox.maxX) / 2;
-  const cy = (bbox.minY + bbox.maxY) / 2;
-  const project = makeProjector(rotatePoints(allPoints, rotationDeg, cx, cy), rect);
+  const lat0 = midLatOf(allPoints);
+  const kmRings = rings.map((ring) => toKm(ring, lat0));
+  const kmPoints = kmRings.flat();
+  const rotationDeg = prefs.autoRotate ? chooseRotation(kmPoints) : 0;
+  const kmBbox = bboxOf(kmPoints);
+  const cx = (kmBbox.minX + kmBbox.maxX) / 2;
+  const cy = (kmBbox.minY + kmBbox.maxY) / 2;
+  const rotatedRings = kmRings.map((ring) => rotatePoints(ring, rotationDeg, cx, cy));
+  const project = makeProjector(rotatedRings.flat(), rect);
 
   const single = input.parcels === undefined || input.parcels.length <= 1;
 
   if (single) {
     doc.setDrawColor('#15803d');
     doc.setLineWidth(0.5);
-    drawRingOutlines(doc, rings, project);
+    drawRingOutlines(doc, rotatedRings, project);
   } else {
     doc.setFillColor('#166534');
-    for (const ring of rings) {
+    for (const ring of rotatedRings) {
       if (ring.length < 2) {
         continue;
       }
@@ -238,19 +248,28 @@ function drawMapSection(
     }
     doc.setDrawColor('#1e3a8a');
     doc.setLineWidth(0.5);
-    drawRingOutlines(doc, rings, project);
+    drawRingOutlines(doc, rotatedRings, project);
   }
 
   doc.setTextColor('#111827');
   doc.setFontSize(6);
   input.trees.forEach((tree, index) => {
-    const rotated = rotatePoints([[tree.lng, tree.lat]], rotationDeg, cx, cy)[0];
+    const kmPoint = toKm([[tree.lng, tree.lat]], lat0)[0];
+    const rotated = rotatePoints([kmPoint], rotationDeg, cx, cy)[0];
     const [x, y] = project(rotated[0], rotated[1]);
     const radius = markerSizeForCm(tree.circumference, prefs.markerScale) / 2;
+    const clampedX = clampInside(x, rect.x + radius + 1, rect.x + rect.w - radius - 1);
+    const clampedY = clampInside(y, rect.y + radius + 1, rect.y + rect.h - radius - 1);
     doc.setFillColor(getSpeciesColor(tree.species));
-    doc.circle(x, y, radius, 'F');
+    doc.circle(clampedX, clampedY, radius, 'F');
     if (prefs.showNumberedTable) {
-      doc.text(String(index + 1), x + radius + 1.4, y - radius - 0.8);
+      const labelLeft = clampedX > rect.x + rect.w - 14;
+      const labelX = labelLeft ? clampedX - radius - 1.4 : clampedX + radius + 1.4;
+      if (labelLeft) {
+        doc.text(String(index + 1), labelX, clampedY - radius - 0.8, { align: 'right' });
+      } else {
+        doc.text(String(index + 1), labelX, clampedY - radius - 0.8);
+      }
     }
   });
 

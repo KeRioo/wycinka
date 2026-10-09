@@ -67,6 +67,22 @@ export function rotatePoints(
   });
 }
 
+const KM_PER_DEG_LAT = 110.574;
+const KM_PER_DEG_LNG = 111.32;
+
+export function midLatOf(points: readonly LngLat[]): number {
+  const bbox = bboxOf(points);
+  return (bbox.minY + bbox.maxY) / 2;
+}
+
+export function toKm(points: readonly LngLat[], lat0: number): LngLat[] {
+  const factor = Math.cos((lat0 * Math.PI) / 180);
+  return points.map(([lng, lat]) => [
+    lng * KM_PER_DEG_LNG * factor,
+    lat * KM_PER_DEG_LAT,
+  ] as LngLat);
+}
+
 export function chooseRotation(
   points: readonly LngLat[],
   step = 5,
