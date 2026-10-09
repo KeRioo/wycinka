@@ -37,6 +37,10 @@ const { FakeDoc } = vi.hoisted(() => {
       this.log('line', args);
     }
 
+    lines(...args: unknown[]): void {
+      this.log('lines', args);
+    }
+
     circle(...args: unknown[]): void {
       this.log('circle', args);
     }
@@ -81,7 +85,8 @@ vi.mock('jspdf', () => ({
   jsPDF: FakeDoc,
 }));
 
-import { generatePdfReport, pdfFileName } from '@/lib/pdf/pdfReport';
+import { generatePdfReport, pdfFileName, buildParcelHeader, collectMapRings } from '@/lib/pdf/pdfReport';
+import type { Parcel, ParcelAggregateResponse } from '@/services/api.types';
 
 interface Doc { calls: Call[] }
 
@@ -253,13 +258,176 @@ describe('generatePdfReport', () => {
 });
 
 describe('pdfFileName', () => {
-  it('should slugify the project name and add the date', () => {
-    const name = pdfFileName(PROJECT, new Date('2026-03-01T10:00:00Z'));
+  it('should slugify the project name and add the date', () => {    const name = pdfFileName(PROJECT, new Date('2026-03-01T10:00:00Z'));
     expect(name).toBe('wycinka-las-wolski-2026-03-01.pdf');
   });
 
   it('should use a fallback slug when the name is only punctuation', () => {
     const name = pdfFileName({ ...PROJECT, name: '!!!' }, new Date('2026-03-01T10:00:00Z'));
     expect(name).toBe('wycinka-projekt-2026-03-01.pdf');
+  });
+});
+
+function makeParcel(teryt: string, lng: number, lat: number): Parcel {
+  return {
+    id: teryt,
+    teryt,
+    number: teryt,
+    voivodeship: 'mazowieckie',
+    county: 'Warszawa',
+    commune: 'Śródmieście',
+    region: '0001',
+    region_name: 'Obręb 0001',
+    area_m2: 1000,
+    land_use: 'Ls',
+    geom: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [lng, lat],
+          [lng + 0.01, lat],
+          [lng + 0.01, lat + 0.01],
+          [lng, lat],
+        ],
+      ],
+    },
+    bbox: [lng, lat, lng + 0.01, lat + 0.01],
+    centroid: [lng + 0.005, lat + 0.005],
+    fetched_at: '2026-09-29T03:00:00Z',
+    voivodeship_code: '14',
+    county_code: '12',
+    commune_code: '01',
+    datasource: 'uldk',
+  };
+}
+
+const MULTI_PATCH: ParcelAggregateResponse = {
+  type: 'MultiPolygon',
+  coordinates: [
+    [
+      [
+        [21.0, 52.2],
+        [21.02, 52.2],
+        [21.02, 52.22],
+        [21.0, 52.2],
+      ],
+    ],
+    [
+      [
+        [21.05, 52.25],
+        [21.06, 52.25],
+        [21.06, 52.26],
+        [21.05, 52.25],
+      ],
+    ],
+  ],
+  bbox: [21.0, 52.2, 21.06, 52.26],
+  area_m2: 9999,
+  parcels: ['A', 'B'],
+};
+
+describe('buildParcelHeader', () => {
+  it('should use single TERYT label for one parcel', () => {
+    const parcels = [makeParcel('A', 21, 52.2)];
+    expect(buildParcelHeader({ ...PROJECT, teryt: 'A' }, parcels)).toBe('TERYT: A');
+  });
+
+  it('should list count for multi parcels', () => {
+    const parcels = [makeParcel('A', 21, 52.2), makeParcel('B', 21.05, 52.25)];
+    const header = buildParcelHeader(PROJECT, parcels);
+    expect(header).toContain('Działki: 2');
+    expect(header).toContain('A');
+    expect(header).toContain('B');
+  });
+
+  it('should truncate long parcel lists', () => {
+    const parcels = Array.from({ length: 6 }, (_, i) => makeParcel(`T${String(i)}`, 21, 52.2));
+    const header = buildParcelHeader(PROJECT, parcels);
+    expect(header).toContain('Działki: 6');
+    expect(header).toContain('…');
+  });
+});
+
+describe('collectMapRings', () => {
+  it('should return aggregate rings when aggregate given', () => {
+    const rings = collectMapRings({
+      project: PROJECT,
+      trees: [],
+      parcels: [makeParcel('A', 21, 52.2)],
+      aggregate: MULTI_PATCH,
+    });
+    expect(rings).toHaveLength(2);
+  });
+
+  it('should return per-parcel rings without aggregate', () => {
+    const rings = collectMapRings({
+      project: PROJECT,
+      trees: [],
+      parcels: [makeParcel('A', 21, 52.2), makeParcel('B', 21.05, 52.25)],
+    });
+    expect(rings).toHaveLength(2);
+  });
+
+  it('should fall back to project polygon for single-parcel projects', () => {
+    const rings = collectMapRings({ project: PROJECT, trees: [] });
+    expect(rings).toHaveLength(1);
+    expect(rings[0]?.length).toBeGreaterThan(0);
+  });
+});
+
+describe('generatePdfReport — multi-parcel', () => {
+  beforeEach(() => {
+    FakeDoc.prototype.calls = [];
+    FakeDoc.prototype.pages = 1;
+  });
+
+  it('should fill polygons and draw navy outline when multi', () => {
+    const parcels = [makeParcel('A', 21, 52.2), makeParcel('B', 21.05, 52.25)];
+    const doc = generatePdfReport({ project: { ...PROJECT, polygon: undefined }, trees: [], parcels });
+    expect(callsOf(asDoc(doc), 'lines').length).toBeGreaterThan(0);
+    const setFillColorCalls = callsOf(asDoc(doc), 'setFillColor');
+    expect(setFillColorCalls.some((call) => call.args.includes('#166534'))).toBe(true);
+    expect(callsOf(asDoc(doc), 'setDrawColor').some((call) => call.args.includes('#1e3a8a'))).toBe(true);
+  });
+
+  it('should label parcel count in header and map for multi', () => {
+    const parcels = [makeParcel('A', 21, 52.2), makeParcel('B', 21.05, 52.25)];
+    const doc = generatePdfReport({
+      project: { ...PROJECT, polygon: undefined },
+      trees: [],
+      parcels,
+      aggregate: MULTI_PATCH,
+    });
+    const texts = textsOf(asDoc(doc)).join('\n');
+    expect(texts).toContain('Działki: 2');
+    expect(texts).toContain('2 działki');
+  });
+
+  it('should map trees from any parcel when multi', () => {
+    const parcels = [makeParcel('A', 21, 52.2), makeParcel('B', 21.05, 52.25)];
+    const trees = [
+      tree({ lat: 52.21, lng: 21.01, id: 't1' }),
+      tree({ lat: 52.26, lng: 21.06, id: 't2' }),
+    ];
+    const doc = generatePdfReport({
+      project: { ...PROJECT, polygon: undefined },
+      trees,
+      parcels,
+    });
+    const circles = callsOf(asDoc(doc), 'circle');
+    expect(circles.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('should keep single-parcel behaviour unchanged', () => {
+    const parcels = [makeParcel('A', 21, 52.2)];
+    const doc = generatePdfReport({
+      project: { ...PROJECT, polygon: undefined, teryt: 'A' },
+      trees: [],
+      parcels,
+    });
+    expect(callsOf(asDoc(doc), 'lines')).toHaveLength(0);
+    const texts = textsOf(asDoc(doc));
+    expect(texts.some((text) => text.startsWith('TERYT:'))).toBe(true);
+    expect(texts.find((text) => text.startsWith('TERYT:'))).toBe('TERYT: A');
   });
 });

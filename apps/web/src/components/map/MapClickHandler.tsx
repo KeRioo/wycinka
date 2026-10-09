@@ -4,7 +4,8 @@ import MapView, { type TreeFeatureProperties } from './MapView';
 import { useMapStore } from '@/stores/mapStore';
 import { useParcelLookup } from '@/hooks/useAPI';
 import { useTreeStore } from '@/stores/treeStore';
-import type { Parcel, PolygonGeometry } from '@/services/api.types';
+import type { Parcel } from '@/services/api.types';
+import { useProjectStore } from '@/stores/projectStore';
 import type { LatLng } from '@/lib/geo';
 import { extractVertexPoints, snapThresholdMeters, snapToVertex, SNAP_THRESHOLD_M } from '@/lib/snap';
 
@@ -19,12 +20,38 @@ function toGeoJSONPolygon(parcel: Parcel): GeoJSON.Polygon {
       coordinates: [],
     };
   }
-  const polygon: PolygonGeometry = parcel.geom;
+  return parcelGeomToGeoJSON(parcel.geom) as GeoJSON.Polygon;
+}
+
+function parcelGeomToGeoJSON(
+  geom: Parcel['geom'],
+): GeoJSON.Polygon | GeoJSON.MultiPolygon {
+  if (geom.type === 'Polygon') {
+    return {
+      type: 'Polygon',
+      coordinates: geom.coordinates.map((ring) =>
+        ring.map(([lng, lat]) => [lng, lat] as [number, number]),
+      ),
+    };
+  }
   return {
-    type: 'Polygon',
-    coordinates: polygon.coordinates.map((ring) =>
-      ring.map(([lng, lat]) => [lng, lat] as [number, number]),
+    type: 'MultiPolygon',
+    coordinates: geom.coordinates.map((polygon) =>
+      polygon.map((ring) => ring.map(([lng, lat]) => [lng, lat] as [number, number])),
     ),
+  };
+}
+
+function parcelsToFeatureCollection(
+  parcels: readonly Parcel[],
+): GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon> {
+  return {
+    type: 'FeatureCollection',
+    features: parcels.map((parcel) => ({
+      type: 'Feature',
+      geometry: parcelGeomToGeoJSON(parcel.geom),
+      properties: { teryt: parcel.teryt },
+    })),
   };
 }
 
@@ -44,8 +71,13 @@ export default function MapClickHandler({
   onTreeClick,
 }: MapClickHandlerProps = {}): JSX.Element {
   const selectedParcel = useMapStore((s) => s.selectedParcel);
+  const projectParcels = useProjectStore((s) => s.projectParcels);
   const mode = useTreeStore((s) => s.mode);
   const highlightGeometry = selectedParcel ? toGeoJSONPolygon(selectedParcel) : null;
+  const projectParcelsGeometry = useMemo(
+    () => parcelsToFeatureCollection(projectParcels),
+    [projectParcels],
+  );
   const { lookup } = useParcelLookup();
 
   const [map, setMap] = useState<MaplibreMap | null>(null);
@@ -101,6 +133,7 @@ export default function MapClickHandler({
       onMapClick={handleMapClick}
       onMapReady={handleMapReady}
       highlightGeometry={highlightGeometry}
+      projectParcelsGeometry={projectParcelsGeometry}
       {...(treeLayer !== undefined ? { treeLayer } : {})}
       {...(onTreeClick !== undefined ? { onTreeClick } : {})}
       pendingDrag={pendingDrag}

@@ -4,11 +4,16 @@ async function ensureProjectAndFab(page: import('@playwright/test').Page): Promi
   await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
   // Wait for projects to load (avoid race with initial Dexie load)
   await page.waitForTimeout(500);
-  const createBtn = page.getByTestId('create-first-project');
-  const createVisible = await createBtn.isVisible().catch(() => false);
-  if (createVisible) {
-    await createBtn.click({ force: true });
-    await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const createBtn = page.getByTestId('create-first-project');
+    if (await createBtn.isVisible().catch(() => false)) {
+      await createBtn.click({ force: true });
+      await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
+    }
+    if (await page.getByTestId('fab-add-tree').isVisible().catch(() => false)) {
+      break;
+    }
+    await page.waitForTimeout(500);
   }
   await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
 }

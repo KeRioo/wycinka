@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/db/schema';
 import { useProjectStore } from '@/stores/projectStore';
+import type { Parcel } from '@/services/api.types';
 
 describe('useProjectStore', () => {
   beforeEach(async () => {
@@ -156,5 +157,116 @@ describe('useProjectStore', () => {
     const stored = await db.projects.get(p.id);
     expect(stored?.pdfPrefs.layout).toBe('one-per-page');
     expect(useProjectStore.getState().projects[0]?.pdfPrefs.tableOnSeparatePage).toBe(true);
+  });
+});
+
+describe('useProjectStore parcels', () => {
+  const baseParcel: Parcel = {
+    id: '141201_1.0001.6509',
+    teryt: '141201_1.0001.6509',
+    number: '6509',
+    voivodeship: 'mazowieckie',
+    county: 'Warszawa',
+    commune: 'Śródmieście',
+    region: '0001',
+    region_name: 'Obręb 0001',
+    area_m2: 1234.56,
+    land_use: 'Ls',
+    geom: { type: 'Polygon' as const, coordinates: [[[21.006, 52.231], [21.007, 52.231], [21.007, 52.232], [21.006, 52.231]]] },
+    bbox: [21.006, 52.231, 21.007, 52.232] as const,
+    centroid: [21.0065, 52.2315] as const,
+    fetched_at: '2026-09-29T03:00:00Z',
+    voivodeship_code: '14',
+    county_code: '12',
+    commune_code: '01',
+    datasource: 'uldk',
+  };
+
+  function makeParcel(teryt: string) {
+    return { ...baseParcel, id: teryt, teryt };
+  }
+
+  beforeEach(async () => {
+    db.delete();
+    await db.open();
+    useProjectStore.getState().clear();
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+  });
+
+  it('should add parcel to active project and store snapshot', async () => {
+    await useProjectStore.getState().createAndActivate('Las');
+    await useProjectStore.getState().addParcelToProject(makeParcel('141201_1.0001.6509'));
+    const state = useProjectStore.getState();
+    expect(state.projectParcels).toHaveLength(1);
+    expect(state.projectParcels[0]?.teryt).toBe('141201_1.0001.6509');
+    expect(state.projectParcels[0]?.commune).toBe('Śródmieście');
+  });
+
+  it('should add parcel to explicitly given project', async () => {
+    await useProjectStore.getState().createAndActivate('A');
+    const b = await useProjectStore.getState().createAndActivate('B');
+    useProjectStore.getState().setActive(b.id);
+    await useProjectStore.getState().addParcelToProject(makeParcel('T1'));
+    const rows = await db.project_parcels.where('projectId').equals(b.id).toArray();
+    expect(rows.map((row) => row.teryt)).toEqual(['T1']);
+  });
+
+  it('should not duplicate and not overwrite when adding same teryt twice', async () => {
+    await useProjectStore.getState().createAndActivate('Las');
+    await useProjectStore.getState().addParcelToProject(makeParcel('T1'));
+    await useProjectStore.getState().addParcelToProject(makeParcel('T1'));
+    expect(useProjectStore.getState().projectParcels).toHaveLength(1);
+  });
+
+  it('should remove parcel from active project', async () => {
+    await useProjectStore.getState().createAndActivate('Las');
+    await useProjectStore.getState().addParcelToProject(makeParcel('T1'));
+    await useProjectStore.getState().addParcelToProject(makeParcel('T2'));
+    await useProjectStore.getState().removeParcelFromProject('T1');
+    expect(useProjectStore.getState().projectParcels.map((p) => p.teryt)).toEqual(['T2']);
+    const state = useProjectStore.getState();
+    expect(state.isParcelInProject('T2')).toBe(true);
+    expect(state.isParcelInProject('T1')).toBe(false);
+  });
+
+  it('should show toast error on 20-parcel limit', async () => {
+    await useProjectStore.getState().createAndActivate('Las');
+    for (let i = 1; i <= 20; i++) {
+      await useProjectStore.getState().addParcelToProject(makeParcel(`T${String(i)}`));
+    }
+    await useProjectStore.getState().addParcelToProject(makeParcel('T21'));
+    const state = useProjectStore.getState();
+    expect(state.toast).toBe('Limit 20 działek na projekt');
+    expect(state.projectParcels).toHaveLength(20);
+  });
+
+  it('should persist parcels across reload (loadProjectParcels)', async () => {
+    const project = await useProjectStore.getState().createAndActivate('Las');
+    await useProjectStore.getState().addParcelToProject(makeParcel('T9'));
+    useProjectStore.getState().clear();
+    useProjectStore.setState({ projects: [project], activeProjectId: project.id });
+    await useProjectStore.getState().loadProjectParcels(project.id);
+    expect(useProjectStore.getState().projectParcels.map((p) => p.teryt)).toEqual(['T9']);
+  });
+
+  it('should clear projectParcels when loading for null project', async () => {
+    await useProjectStore.getState().createAndActivate('Las');
+    await useProjectStore.getState().addParcelToProject(makeParcel('T1'));
+    await useProjectStore.getState().loadProjectParcels(null);
+    expect(useProjectStore.getState().projectParcels).toEqual([]);
+  });
+
+  it('should cascade project parcels with deleteProject', async () => {
+    await useProjectStore.getState().createAndActivate('Las');
+    await useProjectStore.getState().addParcelToProject(makeParcel('T1'));
+    const id = useProjectStore.getState().activeProjectId!
+    await useProjectStore.getState().deleteProject(id);
+    expect(useProjectStore.getState().projectParcels).toHaveLength(0);
+    expect(await db.project_parcels.count()).toBe(0);
   });
 });

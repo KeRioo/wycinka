@@ -3,8 +3,18 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import ProjectsPage from '@/pages/ProjectsPage';
-import { db } from '@/db/schema';
+import { db, addParcelToProjectDb } from '@/db/schema';
 import { useProjectStore } from '@/stores/projectStore';
+import type { Parcel } from '@/services/api.types';
+import { MOCK_PARCEL_FOUND } from '@/test/mocks/api-responses';
+
+function makeParcel(teryt: string): Parcel {
+  const found = MOCK_PARCEL_FOUND;
+  if (!found.found) {
+    throw new Error('Mock parcel missing');
+  }
+  return { ...found.parcel, id: teryt, teryt };
+}
 
 const mockNavigate = vi.fn();
 
@@ -147,5 +157,56 @@ describe('ProjectsPage', () => {
     await waitFor(() => {
       expect(useProjectStore.getState().projects).toHaveLength(0);
     });
+  });
+
+  it('should show parcel chips with count for active project', async () => {
+    const project = await useProjectStore.getState().createAndActivate('Las');
+    await addParcelToProjectDb(project.id, makeParcel('141201_1.0001.6501'));
+    await addParcelToProjectDb(project.id, makeParcel('141201_1.0001.6502'));
+    render(
+      <MemoryRouter>
+        <ProjectsPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('active-project-panel')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('project-parcel-count')).toHaveTextContent('Działki: 2');
+    expect(screen.getByTestId('parcel-chip-141201_1.0001.6501')).toBeInTheDocument();
+    expect(screen.getByTestId('parcel-chip-141201_1.0001.6502')).toBeInTheDocument();
+  });
+
+  it('should remove parcel chip on remove click', async () => {
+    const user = userEvent.setup();
+    const project = await useProjectStore.getState().createAndActivate('Las');
+    await addParcelToProjectDb(project.id, makeParcel('141201_1.0001.6501'));
+    await addParcelToProjectDb(project.id, makeParcel('141201_1.0001.6502'));
+    render(
+      <MemoryRouter>
+        <ProjectsPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('parcel-chip-141201_1.0001.6501')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('parcel-chip-remove-141201_1.0001.6501'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('parcel-chip-141201_1.0001.6501')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('project-parcel-count')).toHaveTextContent('Działki: 1');
+  });
+
+  it('should show empty message when active project has no parcels', async () => {
+    await useProjectStore.getState().createAndActivate('Puste las');
+    render(
+      <MemoryRouter>
+        <ProjectsPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('active-project-panel')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('project-parcel-count')).toHaveTextContent('Działki: 0');
+    expect(screen.queryByTestId('project-parcel-chips')).not.toBeInTheDocument();
   });
 });
