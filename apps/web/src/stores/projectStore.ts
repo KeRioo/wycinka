@@ -3,6 +3,7 @@ import {
   createProject,
   deleteProject as deleteProjectFromDb,
   listProjects,
+  updatePdfPrefs as updatePdfPrefsInDb,
   type Project,
 } from '@/db/schema';
 
@@ -17,6 +18,7 @@ interface ProjectState {
   setActive: (id: string | null) => void;
   createAndActivate: (name: string) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
+  savePdfPrefs: (id: string, prefs: Project['pdfPrefs']) => Promise<void>;
   refresh: () => Promise<void>;
   getActive: () => Project | null;
   clear: () => void;
@@ -79,6 +81,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   refresh: async () => {
     await get().loadProjects();
+  },
+
+  savePdfPrefs: async (id, prefs) => {
+    const updated = await updatePdfPrefsInDb(id, prefs);
+    set((state) => ({
+      projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
+    }));
   },
 
   getActive: () => {

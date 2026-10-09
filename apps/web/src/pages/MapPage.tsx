@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl';
-import { List } from 'lucide-react';
+import { List, FileDown } from 'lucide-react';
 import MapClickHandler from '@/components/map/MapClickHandler';
 import ParcelPopup from '@/components/map/ParcelPopup';
 import AddTreePanel from '@/components/trees/AddTreePanel';
 import Fab from '@/components/trees/Fab';
 import TreeListPanel from '@/components/trees/TreeListPanel';
 import TreePopup from '@/components/trees/TreePopup';
+import PdfExportDialog from '@/components/pdf/PdfExportDialog';
 import { buildPendingFeature, treesToFeatureCollection } from '@/components/trees/TreeMarkers';
 import type { TreeFeatureProperties } from '@/components/map/MapView';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
@@ -48,6 +49,7 @@ export default function MapPage(): JSX.Element {
   const setSelectedTreeId = useTreeStore((s) => s.setSelectedTreeId);
   const listPanelOpen = useTreeStore((s) => s.listPanelOpen);
   const setListPanelOpen = useTreeStore((s) => s.setListPanelOpen);
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
 
   const { position, error: gpsError, loading: gpsLoading, refresh } = useGeolocation();
 
@@ -242,6 +244,7 @@ export default function MapPage(): JSX.Element {
   };
 
   const hasProject = activeProjectId !== null && projects.length > 0;
+  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const isLoadingProjects = projectsStatus === 'loading';
 
   return (
@@ -324,6 +327,32 @@ export default function MapPage(): JSX.Element {
         >
           <List aria-hidden="true" className="h-6 w-6" />
         </button>
+      )}
+
+      {hasProject && (
+        <button
+          type="button"
+          aria-label="Eksportuj PDF"
+          data-testid="pdf-export-toggle"
+          disabled={trees.length === 0}
+          onClick={() => {
+            setPdfDialogOpen(true);
+          }}
+          className="fixed bottom-14 left-20 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-white text-forest-800 shadow-lg transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 focus-visible:ring-offset-2 disabled:text-stone-300"
+        >
+          <FileDown aria-hidden="true" className="h-6 w-6" />
+        </button>
+      )}
+
+      {hasProject && activeProject !== null && (
+        <PdfExportDialog
+          open={pdfDialogOpen}
+          project={activeProject}
+          trees={trees}
+          onClose={() => {
+            setPdfDialogOpen(false);
+          }}
+        />
       )}
 
       <TreeListPanel
