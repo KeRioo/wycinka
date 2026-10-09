@@ -87,6 +87,69 @@ def _column_names(path: Path, table: str) -> set[str]:
         conn.close()
 
 
+def _apply_script(path: Path, sql: str) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript(sql)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _legacy_buggy_delete_trigger_sql() -> str:
+    return """
+CREATE TRIGGER IF NOT EXISTS parcels_rtree_delete AFTER DELETE ON parcels
+BEGIN
+  DELETE FROM parcels_rtree_map WHERE parcel_id = OLD.id;
+  DELETE FROM parcels_rtree WHERE id = (
+    SELECT rtree_id FROM parcels_rtree_map WHERE parcel_id = OLD.id
+  );
+END;
+"""
+
+
+def _insert_parcel(path: Path) -> None:
+    placeholders = ", ".join("?" for _ in _PARCEL_ROW)
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute(
+            f"INSERT INTO parcels VALUES ({placeholders})",
+            tuple(_PARCEL_ROW.values()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _delete_parcel(path: Path) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("DELETE FROM parcels")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _rtree_counts(path: Path) -> tuple[int, int]:
+    conn = sqlite3.connect(path)
+    try:
+        rtree_n = conn.execute("SELECT count(*) FROM parcels_rtree").fetchone()[0]
+        map_n = conn.execute("SELECT count(*) FROM parcels_rtree_map").fetchone()[0]
+        return int(rtree_n), int(map_n)
+    finally:
+        conn.close()
+
+
+def _install_legacy_buggy_trigger(path: Path) -> None:
+    conn = sqlite3.connect(path)
+    try:
+        conn.executescript("DROP TRIGGER IF EXISTS parcels_rtree_delete;")
+        conn.executescript(_legacy_buggy_delete_trigger_sql())
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def test_migrations_when_empty_sqlite_then_full_schema(db_path: Path) -> None:
     command.upgrade(_alembic_config(db_path), "head")
 
@@ -161,6 +224,67 @@ async def test_migrations_when_apply_then_rtree_triggers_work(db_path: Path) -> 
         assert await db.fetch_all("SELECT parcel_id FROM parcels_rtree_map") == []
     finally:
         await db.close()
+
+
+def test_migrations_when_delete_parcel_then_no_rtree_orphans(db_path: Path) -> None:
+    config = _alembic_config(db_path)
+    command.upgrade(config, "head")
+
+    _insert_parcel(db_path)
+    assert _rtree_counts(db_path) == (1, 1)
+
+    _delete_parcel(db_path)
+
+    assert _rtree_counts(db_path) == (0, 0)
+
+
+def test_migrations_when_legacy_buggy_trigger_then_upgrade_removes_orphans(
+    db_path: Path,
+) -> None:
+    config = _alembic_config(db_path)
+    command.upgrade(config, "0001_initial_schema")
+    _install_legacy_buggy_trigger(db_path)
+
+    _insert_parcel(db_path)
+    _delete_parcel(db_path)
+    assert _rtree_counts(db_path) == (1, 0)
+
+    command.upgrade(config, "head")
+
+    assert _rtree_counts(db_path) == (0, 0)
+    _insert_parcel(db_path)
+    _delete_parcel(db_path)
+    assert _rtree_counts(db_path) == (0, 0)
+
+
+def test_migrations_when_downgrade_to_0001_then_legacy_trigger_recreated(
+    db_path: Path,
+) -> None:
+    config = _alembic_config(db_path)
+    command.upgrade(config, "head")
+    command.downgrade(config, "0001_initial_schema")
+
+    _insert_parcel(db_path)
+    _delete_parcel(db_path)
+
+    rtree_n, map_n = _rtree_counts(db_path)
+    assert map_n == 0
+    assert rtree_n in (0, 1)
+
+
+def test_migrations_when_upgrade_cycle_then_delete_cycle_stays_clean(
+    db_path: Path,
+) -> None:
+    config = _alembic_config(db_path)
+    command.upgrade(config, "0001_initial_schema")
+    command.upgrade(config, "head")
+    command.downgrade(config, "0001_initial_schema")
+    command.upgrade(config, "head")
+
+    _insert_parcel(db_path)
+    _delete_parcel(db_path)
+
+    assert _rtree_counts(db_path) == (0, 0)
 
 
 async def test_migrations_when_apply_then_sync_meta_helpers_work(

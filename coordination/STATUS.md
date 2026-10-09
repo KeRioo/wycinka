@@ -410,3 +410,27 @@ TODO dla następnego etapu:
 - Skala liniowa (scale bar) i legenda gatunków na mapie PDF — nie w zakresie milestone
 - TERYT/pole działki w nagłówku tylko gdy projekt ma działkę z ULDK (obecnie '—')
 - Paginacja dużej tabeli zbiorczej przy bardzo wielu gatunkach (obecnie pojedyncza strona OK do ~25 gatunków)
+
+## Backend (backlog #4 — fix triggera parcels_rtree_delete) — branch fix/rtree-delete-orphan
+
+### Bug
+Trigger `parcels_rtree_delete` (AFTER DELETE ON parcels) najpierw czyścił `parcels_rtree_map`, a dopiero potem `DELETE FROM parcels_rtree WHERE id = (SELECT rtree_id FROM parcels_rtree_map ...)`. W momencie drugiego DELETE wiersz mapy już nie istniał, więc subquery zwracało NULL → wpis w `parcels_rtree` zostawał orphan (mapa czysta, R-tree zabrudzone; wyniki zapytań OK bo join idzie przez mapę).
+
+### Fix
+- `app/core/db.py`: trigger podzielony na `RTREE_INSERT_TRIGGER_SQL` / `RTREE_DELETE_TRIGGER_SQL` (`RTREE_TRIGGERS_SQL` = suma, `ALL_SCHEMA` bez zmian). W `parcels_rtree_delete` odwrotna kolejność: najpierw `DELETE FROM parcels_rtree` (subquery czyta `rtree_id`, zanim mapa zostanie usunięta), potem `DELETE FROM parcels_rtree_map`.
+- Migracja **0002_fix_rtree_delete_trigger** (down_revision `0001_initial_schema`): DROP TRIGGER + CREATE TRIGGER z definicji importowanej z `app.core.db` (jedno źródło prawdy, pomocnik `_apply_script` jak w 0001) + cleanup istniejących orphanów: `DELETE FROM parcels_rtree WHERE id NOT IN (SELECT rtree_id FROM parcels_rtree_map)`. Downgrade odtwarza legacy (buggy) definicję.
+- Adnotacja dla nadzorcy: `docs/data-schema.md` wymaga update (definicja triggera parcels_rtree_delete — nowa kolejność operacji) przy merge; `docs/` nie modyfikowałem.
+
+### Delete paths w API (punkt 2 z zadania)
+- Brak endpointu DELETE w `apps/api` (parcel_service / sync_service / api/* — tylko insert/upsert). `DELETE FROM parcels` występuje wyłącznie w generowaniu fixture (`tests/fixtures/generate_sample.py`) i testach — realny harm to ETL/sync przez upsert. Orphans powstawały więc tylko przy czyszczeniu testowych/fixture DB.
+
+### Testy (4 nowe w `tests/test_migrations.py`)
+- delete działki → `parcels_rtree` i mapa puste (0,0) przy head
+- REPRO: instalacja legacy buggy triggera na 0001 → delete zostawia orphan (1,0) → `upgrade head` czyści orphan i dalszy INSERT/DELETE cycle czysty
+- `downgrade 0001` → trigger odtworzony, mapa czyszczona (legacy zachowanie — rtree może zostać orphan, mapa zawsze czyszczona)
+- upgrade/downgrade cycle → delete cycle czysty
+
+### Wyniki
+- pytest: **76/76 green** ( było 72, +4 )
+- coverage: **88%** (bez regresji), `app/core/db.py` 89%
+- ruff check: clean
