@@ -23,7 +23,7 @@ describe('BackupPanel', () => {
 
   it('should export current data and show success message', async () => {
     await createProject({ name: 'Las Testowy' });
-    const createObjectURL = URL.createObjectURL as ReturnType<typeof vi.fn>;
+    const createObjectURL = URL.createObjectURL.bind(URL) as () => string;
     render(<BackupPanel />);
 
     await userEvent.click(screen.getByTestId('backup-export'));

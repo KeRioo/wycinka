@@ -74,7 +74,7 @@ describe('backup', () => {
     expect(projects[0]?.name).toBe('Las Kozia Góra');
     expect(trees).toHaveLength(2);
     expect(trees[0]?.species).toBeDefined();
-    const lastRange = projects[0]?.rangesConfig[projects[0]!.rangesConfig.length - 1];
+    const lastRange = projects[0]?.rangesConfig[projects[0].rangesConfig.length - 1];
     expect(lastRange?.to).toBe(Number.POSITIVE_INFINITY);
   });
 
@@ -129,7 +129,6 @@ describe('backup', () => {
     await updateTree(trees[0]?.id ?? '', { notes: 'Zmieniona lokalnie' });
 
     const result = await importBackup(backup, 'merge');
-    const allTrees = await listTrees(projectId);
     const merged = await db.projects.toArray();
 
     expect(result.projects).toBe(0);
@@ -221,8 +220,8 @@ describe('backup', () => {
     await seed();
     const projects = await db.projects.toArray();
     const trees = await db.trees.toArray();
-    const bp = projectToBackup(projects[0]!);
-    const bt = treeToBackup(trees[0]!);
+    const bp = projectToBackup(projects[0]);
+    const bt = treeToBackup(trees[0]);
 
     expect(bp.teryt).toBe('141201_1.0001.6509');
     expect(bp.pdfPrefs.tableOnSeparatePage).toBe(false);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { Geometry, PdfPrefs, Project, Tree } from '@/db/schema';
+import type { PdfPrefs, Project, Tree } from '@/db/schema';
+import type { PolygonGeometry } from '@/services/api.types';
 import { db } from '@/db/schema';
 
 export const BACKUP_SCHEMA_VERSION = 1;
@@ -141,21 +142,25 @@ export function treeToBackup(tree: Tree): BackupTree {
   };
 }
 
-function projectFromBackup(bp: BackupProject): Project {
-  let polygon: Geometry | undefined;
-  if (bp.polygon !== undefined && bp.polygon !== null) {
-    polygon = JSON.parse(bp.polygon) as Geometry;
+function parsePolygon(raw: string | null | undefined): PolygonGeometry | undefined {
+  if (raw === undefined || raw === null) {
+    return undefined;
   }
+  return JSON.parse(raw) as PolygonGeometry;
+}
+
+function projectFromBackup(bp: BackupProject): Project {
+  const polygonGap = parsePolygon(bp.polygon);
   return {
     id: bp.id,
     name: bp.name,
     ...(bp.teryt !== undefined ? { teryt: bp.teryt } : {}),
-    ...(polygon !== undefined ? { polygon } : {}),
+    ...(polygonGap !== undefined ? { polygon: polygonGap } : {}),
     ...(bp.bbox !== undefined ? { bbox: bp.bbox } : {}),
     speciesConfig: bp.speciesConfig.map((s) => ({ ...s })),
     rangesConfig: bp.rangesConfig.map((r) => ({
       from: r.from,
-      to: r.to === null ? Number.POSITIVE_INFINITY : r.to,
+      to: r.to ?? Number.POSITIVE_INFINITY,
       label: r.label,
     })),
     pdfPrefs: { ...bp.pdfPrefs, markerScale: { ...bp.pdfPrefs.markerScale } },
@@ -209,8 +214,7 @@ export function parseBackup(json: string): BackupFile {
   }
   const result = backupFileSchema.safeParse(raw);
   if (!result.success) {
-    const issue = result.error.issues[0];
-    const path = issue !== undefined ? issue.path.join('.') : '?';
+    const path = result.error.issues[0].path.join('.');
     throw new BackupError('VALIDATION', `Nieprawidłowa struktura pliku (pole: ${path})`);
   }
   const parsed = result.data;
@@ -247,8 +251,8 @@ export async function importBackup(backup: BackupFile, mode: BackupMode): Promis
     db.projects.toCollection().primaryKeys(),
     db.trees.toCollection().primaryKeys(),
   ]);
-  const knownProjects = new Set<string>(existingProjectIds as string[]);
-  const knownTrees = new Set<string>(existingTreeIds as string[]);
+  const knownProjects = new Set<string>(existingProjectIds);
+  const knownTrees = new Set<string>(existingTreeIds);
   const newProjects = revived.projects.filter((p) => !knownProjects.has(p.id));
   const newTrees = revived.trees.filter((t) => !knownTrees.has(t.id));
   await db.transaction('rw', db.projects, db.trees, async () => {

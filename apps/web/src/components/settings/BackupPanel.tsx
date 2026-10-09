@@ -8,8 +8,8 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/u
 function readFileText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Nie udało się odczytać pliku'));
+    reader.onload = () => { resolve(reader.result as string); };
+    reader.onerror = () => { reject(new Error('Nie udało się odczytać pliku')); };
     reader.readAsText(file);
   });
 }
