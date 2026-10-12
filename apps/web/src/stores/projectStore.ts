@@ -224,11 +224,32 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 }));
 
+function waitForProjectSettled(): Promise<void> {
+  return new Promise((resolve) => {
+    let unsubscribe: (() => void) | null = null;
+    const check = (status: ProjectLoadStatus): void => {
+      if (status !== 'loading') {
+        unsubscribe?.();
+        unsubscribe = null;
+        resolve();
+      }
+    };
+    const { status } = useProjectStore.getState();
+    check(status);
+    if (status === 'loading') {
+      unsubscribe = useProjectStore.subscribe((s) => {
+        check(s.status);
+      });
+    }
+  });
+}
+
 export async function ensureProjectsLoaded(): Promise<void> {
   const state = useProjectStore.getState();
   if (state.status === 'idle' || state.status === 'error') {
     await state.loadProjects();
   }
+  await waitForProjectSettled();
 }
 
 export async function ensureActiveProject(): Promise<Project | null> {
