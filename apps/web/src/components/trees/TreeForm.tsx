@@ -2,10 +2,15 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
+import { Minus, Plus } from 'lucide-react';
 import { DEFAULT_SPECIES } from '@/db/schema';
 import { useTreeStore, treeDraftSchema } from '@/stores/treeStore';
 
 type TreeFormValues = z.infer<typeof treeDraftSchema>;
+
+const CIRCUMFERENCE_STEP = 5;
+const CIRCUMFERENCE_MIN = 0;
+const CIRCUMFERENCE_MAX = 1000;
 
 interface TreeFormProps {
   defaultSpecies?: string;
@@ -45,8 +50,8 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
     reset,
     trigger,
     setValue,
-    formState: { errors, isValid },
     watch,
+    formState: { errors, isValid },
   } = useForm<TreeFormValues>({
     resolver: zodResolver(treeDraftSchema),
     defaultValues: {
@@ -56,6 +61,21 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
     },
     mode: 'all',
   });
+
+  const watchedCircumference = watch('circumference');
+  const currentCircumference =
+    typeof watchedCircumference === 'number' && Number.isFinite(watchedCircumference)
+      ? watchedCircumference
+      : 0;
+
+  const stepCircumference = (amount: number): void => {
+    const rounded = Math.round((currentCircumference + amount) * 10) / 10;
+    const next = Math.min(CIRCUMFERENCE_MAX, Math.max(CIRCUMFERENCE_MIN, rounded));
+    if (next === currentCircumference) {
+      return;
+    }
+    setValue('circumference', next, { shouldValidate: true, shouldDirty: false });
+  };
 
   useEffect(() => {
     reset({
@@ -143,18 +163,44 @@ export default function TreeForm({ defaultSpecies }: TreeFormProps): JSX.Element
         >
           Obwód (cm)
         </label>
-        <input
-          id="tree-circumference"
-          data-testid="tree-circumference"
-          type="number"
-          inputMode="decimal"
-          step="0.1"
-          min={1}
-          max={1000}
-          aria-invalid={errors.circumference !== undefined}
-          className="block h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-base focus:border-forest-500 focus:outline-none focus:ring-2 focus:ring-forest-500"
-          {...register('circumference', { valueAsNumber: true })}
-        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="circumference-minus"
+            aria-label="Zmniejsz obwód o 5 cm"
+            disabled={currentCircumference <= CIRCUMFERENCE_MIN}
+            onClick={() => {
+              stepCircumference(-CIRCUMFERENCE_STEP);
+            }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-stone-300 bg-white text-forest-800 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Minus aria-hidden="true" className="h-5 w-5" />
+          </button>
+          <input
+            id="tree-circumference"
+            data-testid="tree-circumference"
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min={1}
+            max={1000}
+            aria-invalid={errors.circumference !== undefined}
+            className="min-w-0 flex-1 rounded-md border border-stone-300 bg-white px-3 text-center text-base focus:border-forest-500 focus:outline-none focus:ring-2 focus:ring-forest-500"
+            {...register('circumference', { valueAsNumber: true })}
+          />
+          <button
+            type="button"
+            data-testid="circumference-plus"
+            aria-label="Zwiększ obwód o 5 cm"
+            disabled={currentCircumference >= CIRCUMFERENCE_MAX}
+            onClick={() => {
+              stepCircumference(CIRCUMFERENCE_STEP);
+            }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-stone-300 bg-white text-forest-800 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus aria-hidden="true" className="h-5 w-5" />
+          </button>
+        </div>
         {errors.circumference !== undefined && (
           <p data-testid="tree-circumference-error" className="mt-1 text-xs text-red-700">
             {errors.circumference.message}
