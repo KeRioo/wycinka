@@ -108,21 +108,12 @@ def _stage_geojsonseq_sharded(
     country is covered without overlap.
     """
 
-    def _worker(args: tuple[int, int, int]) -> tuple[int, str]:
-        shard_index, total_shards, batch = args
-        reader = KrajParquetReader(parquet_path)
-        shard_output = Path(str(output) + f".shard{shard_index}")
-        count = write_geojsonseq_gzip(
-            reader.iter_parcels_shard(shard_index, total_shards, batch_rows=batch),
-            shard_output,
-        )
-        reader.close()
-        return count, str(shard_output)
-
-    jobs = [(i, shards, batch_rows) for i in range(shards)]
+    jobs = [
+        (i, shards, batch_rows, str(parquet_path), str(output)) for i in range(shards)
+    ]
     ctx = multiprocessing.get_context("fork")
     with ctx.Pool(processes=shards) as pool:
-        results = pool.map(_worker, jobs)
+        results = pool.map(_geojsonseq_shard_worker, jobs)
 
     total = 0
     shard_paths: list[Path] = []
@@ -139,6 +130,19 @@ def _stage_geojsonseq_sharded(
     if total == 0:
         raise GeojsonSeqError(f"no parcels to write, aborting GeoJSONSeq export: {output}")
     return total, shard_paths
+
+
+def _geojsonseq_shard_worker(args: tuple[int, int, int, str, str]) -> tuple[int, str]:
+    """Module-level pool worker (picklable): one shard -> one shard file."""
+    shard_index, total_shards, batch_rows, parquet_str, output_str = args
+    reader = KrajParquetReader(Path(parquet_str))
+    shard_output = Path(output_str + f".shard{shard_index}")
+    count = write_geojsonseq_gzip(
+        reader.iter_parcels_shard(shard_index, total_shards, batch_rows=batch_rows),
+        shard_output,
+    )
+    reader.close()
+    return count, str(shard_output)
 
 
 def _stage_geojsonseq(
