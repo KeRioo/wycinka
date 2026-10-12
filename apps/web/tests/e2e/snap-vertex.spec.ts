@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { openProjectViaLauncherWithFab } from './helpers';
 
 const MINIMAL_PMTILES = readFileSync(
   join(new URL('.', import.meta.url).pathname, 'fixtures/minimal.pmtiles'),
@@ -45,25 +46,7 @@ const PARCEL_RESPONSE = {
 };
 
 async function ensureProjectAndFab(page: Page): Promise<void> {
-  await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(500);
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const createBtn = page.getByTestId('create-first-project');
-    if (await createBtn.isVisible().catch(() => false)) {
-      await createBtn.click({ force: true });
-      await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
-    }
-    if (
-      await page
-        .getByTestId('fab-add-tree')
-        .isVisible()
-        .catch(() => false)
-    ) {
-      break;
-    }
-    await page.waitForTimeout(500);
-  }
-  await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
+  await openProjectViaLauncherWithFab(page);
 }
 
 interface MapHandle {
@@ -146,7 +129,6 @@ test.describe('Snap-to-vertex pinezki', () => {
   });
 
   test('should snap pending pin to a parcel vertex on drop and save there', async ({ page }) => {
-    await page.goto('/map');
     await ensureProjectAndFab(page);
 
     await page.getByTestId('map-container').click({ position: { x: 640, y: 300 } });
@@ -215,7 +197,6 @@ test.describe('Snap-to-vertex pinezki', () => {
   });
 
   test('should keep the pin unsnapped when dropped far from vertices', async ({ page }) => {
-    await page.goto('/map');
     await ensureProjectAndFab(page);
 
     await page.getByTestId('map-container').click({ position: { x: 640, y: 300 } });

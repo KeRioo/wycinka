@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openProjectViaLauncherWithFab } from './helpers';
 
 const MOCK_PARCEL = {
   id: 'test-1',
@@ -62,14 +63,7 @@ async function mockBackend(context: import('@playwright/test').BrowserContext): 
 }
 
 async function ensureProject(page: import('@playwright/test').Page): Promise<void> {
-  await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(500);
-  const createBtn = page.getByTestId('create-first-project');
-  const createVisible = await createBtn.isVisible().catch(() => false);
-  if (createVisible) {
-    await createBtn.click({ force: true });
-    await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
-  }
+  await openProjectViaLauncherWithFab(page);
 }
 
 test.describe('Mobile — AddTreePanel bottom sheet', () => {
@@ -105,7 +99,6 @@ test.describe('Mobile — AddTreePanel bottom sheet', () => {
   });
 
   test('should open as a bottom sheet that does not cover the whole map', async ({ page }) => {
-    await page.goto('/map');
     await ensureProject(page);
     await page.getByTestId('fab-add-tree').tap();
 
@@ -130,7 +123,6 @@ test.describe('Mobile — AddTreePanel bottom sheet', () => {
   });
 
   test('should keep ArrowPad clickable and close via drag handle', async ({ page }) => {
-    await page.goto('/map');
     await ensureProject(page);
     await page.getByTestId('fab-add-tree').tap();
 
@@ -144,7 +136,6 @@ test.describe('Mobile — AddTreePanel bottom sheet', () => {
   });
 
   test('should center the map on the pending pin when locate button pressed', async ({ page }) => {
-    await page.goto('/map');
     await ensureProject(page);
     await page.getByTestId('fab-add-tree').tap();
 
@@ -176,7 +167,6 @@ test.describe('Mobile — single parcel card', () => {
   test('should show one compact parcel card collapsed with TERYT after map click', async ({
     page,
   }) => {
-    await page.goto('/map');
     await ensureProject(page);
     await page.waitForTimeout(1500);
     await page.mouse.click(195, 422);
@@ -217,7 +207,6 @@ test.describe('Desktop — regression', () => {
   });
 
   test('should open narrow right sidebar instead of fullscreen panel', async ({ page }) => {
-    await page.goto('/map');
     await ensureProject(page);
     await page.getByTestId('fab-add-tree').click();
 
@@ -235,7 +224,6 @@ test.describe('Desktop — regression', () => {
   });
 
   test('should seed pending from parcel centroid when GPS denied', async ({ page }) => {
-    await page.goto('/map');
     await ensureProject(page);
     await page.waitForTimeout(1500);
     await page.mouse.click(640, 360);

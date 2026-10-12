@@ -1,27 +1,5 @@
 import { expect, test } from '@playwright/test';
-
-async function ensureProjectAndFab(page: import('@playwright/test').Page): Promise<void> {
-  await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
-  // Wait for projects to load (avoid race with initial Dexie load)
-  await page.waitForTimeout(500);
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const createBtn = page.getByTestId('create-first-project');
-    if (await createBtn.isVisible().catch(() => false)) {
-      await createBtn.click({ force: true });
-      await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
-    }
-    if (
-      await page
-        .getByTestId('fab-add-tree')
-        .isVisible()
-        .catch(() => false)
-    ) {
-      break;
-    }
-    await page.waitForTimeout(500);
-  }
-  await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
-}
+import { openProjectViaLauncherWithFab } from './helpers';
 
 test.describe('FAB + tree capture flow', () => {
   test.beforeEach(async ({ context }) => {
@@ -77,8 +55,7 @@ test.describe('FAB + tree capture flow', () => {
   });
 
   test('should open map, FAB, then capture tree with arrow nudges', async ({ page }) => {
-    await page.goto('/map');
-    await ensureProjectAndFab(page);
+    await openProjectViaLauncherWithFab(page);
 
     await page.getByTestId('fab-add-tree').click();
     await expect(page.getByTestId('add-tree-panel')).toBeVisible();
@@ -106,8 +83,7 @@ test.describe('FAB + tree capture flow', () => {
   });
 
   test('should cancel tree capture without writing', async ({ page }) => {
-    await page.goto('/map');
-    await ensureProjectAndFab(page);
+    await openProjectViaLauncherWithFab(page);
 
     await page.getByTestId('fab-add-tree').click();
     await expect(page.getByTestId('add-tree-panel')).toBeVisible();
@@ -121,8 +97,7 @@ test.describe('FAB + tree capture flow', () => {
   });
 
   test('should disable save button when form is invalid', async ({ page }) => {
-    await page.goto('/map');
-    await ensureProjectAndFab(page);
+    await openProjectViaLauncherWithFab(page);
 
     await page.getByTestId('fab-add-tree').click();
     await expect(page.getByTestId('add-tree-panel')).toBeVisible();
