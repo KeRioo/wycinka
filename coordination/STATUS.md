@@ -2,6 +2,61 @@
 
 > Aktualizowane przez każdego subagenta po zakończeniu zadania.
 
+## Redesign v2 — INTEGRACJA (nadzorca, 2026-10-12) — scalone, gates na całości
+
+- **Merges** do `feat/app-redesign-v2`: B1 (`1d10a40`), B2 (`4f4d0f1`), B3 (`057a192`), B4 (`50073cf`). Konflikty: `STATUS.md` (średnio) + przy B4 kodowe 4 pliki — rozwiązane: AddTreePanel → klasy B4 (`PANEL_MOBILE_HEIGHT_CLASS` `h-[50dvh] min-h-[300px]`), MapPage → struktura B4 (flex, `map-area`, spacer) z wstrzykniętymi B3 `MapControls`/`GpsCrosshair` do środka `map-area`, progi mobilne → wersja B4 (0.47–0.53).
+- **Poprawki nadzorcy post-merge** (`ec756d9`): ParcelCard przesunięta pod pasek attribution/skali (`sm:top-[6.5rem]` — kolizja zgłoszona w B3); **e2e multi-parcel deterministyczne** (kliki przez `map.project` na prepared zoom 14 + oczekiwana akcja add drugiej działki — stare frakcje pikselowe były zależne od kamery = order-dependent flake).
+- **Gates na zintegrowanym drzewie (wykonane przez nadzorcę w wt-v2a)**: typecheck ✓, lint ✓, unit **605/605 (57 plików)** ✓, build ✓, **e2e 55/55 zero flaky** (pełne suite, 2× powtórka targeted multi-parcel solo ✓).
+- **Inciednt OOM (2026-10-12)**: vitest bez capu → 16 workerów jsdom × 2,4 GB = 37 GB → system zamrożony (wyłapane przy weryfikacji B2). Fix: `vitest.config.ts maxThreads: 2` w całych worktree (commit `fix(test)`) + **AGENTS §11.3a** (rule of one). Też: stary vite-сервер z **worktree A** zabitycie — serwował stary bundle przez `reuseExistingServer` i zatruwał e2e innych (fałszywe faile add-tree-v2/arrowpad). RAM limity ważne przy kolejnych fazach.
+- Backlog: patrz §3 (Redesign v2 kamień milowy) oraz §4.
+
+## Redesign v2 — B4 (mobile split 50/50 + routing modal/panel, §12.6) — branch `feat/v2-b4`, worktree `/root/wt-v2-b4` (2026-10-12)
+
+- **Dostarczone**: `AppModalShell` (`src/components/layout/AppModalShell.tsx`; `kind: 'modal'|'panel'` — modal wyśrodkowany z zaciemnieniem + `max-h-[85vh]`/scrollowalne body wg §11.7; panel: mobile = dolna połowa ekranu `h-[50dvh] min-h-[300px]`, desktop = prawy drawer jak dotychczas) + `useMobileViewport` (`src/hooks/useMobileViewport.ts` — wyniesiony poza shell, bo `react-refresh/only-export-components` przy `--max-warnings=0` nie toleruje eksportu hooka z pliku z komponentem). `TreeListPanel` deleguje kontener do shella (treść bez zmian); `AddTreePanel` 62vh→50/50 (zmieniona tylko obudowa, nie treść); `MapPage` = flex-col: map-area `flex-1` + `panel-spacer` 50dvh → **mapa przesuwa się DO GÓRY, nie jest nakryta**; panele zakotwiczone do roota (po debagu: wewnątrz map-area startowały nad spacerem); toggle listy jako pill „Drzewa + licznik" (`tree-list-toggle`, renderowany tylko przy `mode==='idle'`) + PDF w tym samym rzędzie lewym-dolnym; FAB `absolute` w map-area (zielony, widoczny gdy idle); wzajemna exclusywność paneli: FAB zamyka listę, toggle ukryty gdy placing, edit z popupa zamyka listę; `appStore.gpsModalOpen` — stan dla modalu GPS z czerwonego przycisku mapy (B3: komponent GPS-modal do napisania u B3; re-use `AppModalShell kind='modal'` + ten flag).
+- **Testy**: unit +18 — nowy `tests/unit/AppModalShell.test.tsx` (10: modal centered/backdrop/close/„max-h-[85vh]", panel desktop-vs-mobile, `PANEL_MOBILE_HEIGHT_CLASS`, `gpsModalOpen` w appStore), `MapPage.test.tsx` (6: spacer tylko mobile, kind add-tree|list, toggle ukryty gdy placing, FAB zamyka listę, label z licznikiem), `TreeListPanel.test.tsx` (2: panel-class mobile / drawer desktop), `AddTreePanel.test.tsx` (asercja 62vh→50dvh) — **538/538**. E2E: nowy `tests/e2e/mobile-split.spec.ts` (4: mobile add-tree w dolnej połowie + mapa ściśnięta na górze + powrót pełnej mapy po zamknięciu; lista w dolnej połowie z licznikiem; desktop sidebar/drawer bez split) + adaptacja `mobile-panel.spec.ts` do 50/50 (osobny commit).
+- **Gates**: typecheck ✓ / lint --max-warnings=0 ✓ / unit 538 ✓ / coverage **93.71 lin / 90.15 func / 90.54 branch** (progi 80/80/75 ✓; AppModalShell 100%, MapPage 88.5%, AddTreePanel 84%) / build ✓ / **e2e mobile 10/10 ✓ (mobile-panel + mobile-split), full suite 41 pass + 1 flaky**.
+- **Znany flaky (pre-existing, nie z B4)**: `multi-parcel „Działki: 2"` pada/retry-uje **także na bazowym 54df55e** (repro §11.5: base full-suite 1× flaky-retry z pracy w `/root/wt-v2b4-base`; na base pada również po mobilnych specach). Solo na `feat/v2-b4` 3/3 green; w full-suite obie próby tego dnia padały. Order-dependent flake — do stabilizacji przy przeglądzie merge'y przez nadzorcę. Moja stabilizacja w scope B4: `expectPanelSettled` (2 stabilne odczyty bounding box po 120 ms) — framer-motion spring fikał ostry warunek w locie.
+- **Kolizja portu 5173** (znana z STATUS fazy A): pierwsze e2e trafiło w dev-serwer wt-v2-b3 (stary bundle, reuseExistingServer) — po restarcie serwera w swoim worktree wszystko ok; peers uruchamiający playwright równolegle = ryzyko reuse — zalecana serializacja runów (patrz też §11.3a).
+
+## Redesign v2 — faza A (szkielet nawigacji) — branch `feat/app-redesign-v2`, worktree `/root/wt-v2a` (2026-10-12)
+
+Agent: frontend fazy A. Gałąź bazowa: `feat/app-redesign-v2`. Wszystkie commity na tej gałęzi (od `2481e36`), nie mergowane — zostają nadzorcy. Zasada: **agenci dalszych faz NIE edytują plików fazy A poza interfejsami wskazanymi poniżej.**
+
+### Dostarczone
+
+- **Routing (`src/App.tsx`)**: `/` → **StartPage** (launcher), `/app` → **AppPage** (Header + MapPage 100% wysokości; cała app = mapa), `/projects` (bez linku w Headerze, trzeba z launcheru), `/settings` (ścieżka zostaje tymczasowo, nie linkowana — faza B zamienia na modal), `*` → 404. **Route `/map` usunięty.** Header NIE jest już globalny — wchodzi z AppPage; header bez zakładek.
+- **StartPage (`src/pages/StartPage.tsx`, §12.1)**: centralny panel (dark forest gradient + framer-motion), 3 opcje: [Nowy projekt] (dialog nazwy, domyślnie „Mój projekt", walidacja 1–100 znaków; po utworzeniu → `/app`), [Ostatnie projekty] — max 3 wiersze (nazwa / „Działka 251/1, 251/2 … • Otwock" / „N drzew • Edytowano <rel. czas>"), klik = wybór projektu → setActive + touchProject + `/app`, na końcu [Wszystkie projekty] → `/projects`, [Importuj z innego urządzenia] jako mały podrzędny link → modal z instrukcją (3 kroki PL) + re-use `BackupPanel` (eksport/import działa w modalu).
+- **AppPage (`src/pages/AppPage.tsx`, §12.2)**: brama — bez projektów → redirect `/`; reload bez aktywnego projektu auto-wybiera pierwszego (order: updatedAt desc po loadProjects — w praktyce najnowszy); renderuje Header + MapPage.
+- **Header (`src/components/layout/Header.tsx`)**: lewe logo + **project-chip** (nazwa aktywnego projektu, `project-chip`), prawe ☰ (`app-menu`, 44px, role menu) → „Ustawienia" (`menu-settings` → `openAppModal('settings')`), „Raporty" (`menu-reports` → `openAppModal('reports')`), „Wyjdź do startu" (`menu-exit` → navigate `/`). Zamykanie menu: klik poza / Escape. **SearchBox TERYT usunięty** (`SearchBox.tsx`, `lib/search.ts`, unit+e2e) — per §12.7.
+- **appStore (`src/stores/appStore.ts`, zustand)**: `appModal: 'settings' | 'reports' | null` + `openAppModal/closeAppModal` — **faza B podpiać modale ustawień/raportów pod to API** (Menu items już wywołują; modale jeszcze się nie renderują — po kliknięciu „Ustawienia"/„Raporty" app zostaje na /app).
+- **lib/format.ts**: `formatRelativeTime` („teraz" / „N min. temu" / „N godz. temu" / „wczoraj HH:MM" / DD.MM.YYYY HH:MM), `formatParcelsLine` (max 2 numery + „ …" + miejscowość z commune/region_name), `formatTreeCount` (drzewo/drzewa/drzew, wyjątki 12–14).
+- **Dexie (db/schema)**: `touchProject(id)` (updatedAt=now), `getProjectStats` (liczba drzew, numery działek po addedAt, miejscowość), `getRecentProjectsWithStats(limit)`. **projectStore**: `touchProject`, `getRecentProjectsWithStats` (unit).
+- **fix:** `ensureProjectsLoaded` czeka na *w locie trwające* `loadProjects` (subskrypcja stanu) — wcześniej AppPage × StrictMode race redirectował /app na `/` przy reload w stanie 'loading' (bug złapany przez E2E w fazie A).
+- **e2e fixture**: `tests/e2e/fixtures/minimal.pmtiles` — kontekstowy 129B syntetyk bywa odrzucany (varint/magic); zastąpiony pewnym `test_fixture_1.pmtiles` (468 B, protomaps/PMTiles js/test/data) — nadal commitowany (`-f`, §11.3). **Nie kasować.**
+- **e2e pełna migracja**: 10 plików — `trees`, `tree-list`, `mobile-panel`, `arrowpad-hold`, `snap-vertex`, `map-layer-perf`, `map`, `navigation` (przepisany na launcher flow), `multi-parcel`, `settings`. Wejście typu `create-first-project` (MapPage fallback) nieosiągalne — setup z launcheru (`tests/e2e/helpers.ts`: `openProjectViaLauncher(WithFab)`, `gotoStart`, `waitForMapIdle`).
+- **Gates (end-to-end)**: typecheck ✓ / lint --max-warnings=0 ✓ / unit **520/520** ✓ / coverage **93.47% lines / 90.41% funcs / 89.84% branches** (progi 80/80/75 ✓) / build ✓ (PWA precache 21) / **test:e2e 38/38 ✓ ×2 pełne uruchomienie** (0 flaky, 0 did-not-run).
+
+### Znane flaky/pre-existing (odnotowane, nie z fazy A)
+
+- `snap-vertex` „snap pending pin" padał równie na commit базowym (potwierdzone worktree od `a08a6bf`) — root-cause: **psuły fixture pmtiles 129B** (zajął nagłówek!), po wymianie na 468 B → stabilnie green.
+- `settings` backup roundtrip padał też na базою (karty projektów nazywały się domyślnie identycznie → `hasText 'Projekt 1'` pusty match); przepisany z rozpoznawalnymi nazwami (projekty tworzone przez dialog), po imporcie walidacja configu wprost w Dexie (pełne `page.goto('/settings')` resetuje active w store → auto-select zawsze najnowszy — decyzja architektoniczna do fazy B).
+- `multi-parcel` był flaky przy mocku '{}' pmtiles (mapa bez 'load', fitBounds nie działa); z działającym fixture 4× powtórki stabilnie.
+
+### BUILD-ORDER — kolejne fazy (dla delegacji nadzorcy)
+
+- **B1 — modale ustawień/raportów**: podpiąć pod `appStore.openAppModal('settings'|'reports')` (menu już działa). Ustawienia = edytory `SpeciesEditor`/`RangesEditor` (bez wydruków — §12.3). Raporty = modal generowania PDF (re-use `PdfExportDialog`, opcje per-projekt). Mobile: modal wyśrodkowany zaciemniony; panel GPS czerwony resurrects modal (§12.6). Uwaga: usuń/oznajm route `/settings` jako страницы — treść przeniesiona do modalu; nagłówek `max-h-[85vh]` + footer shrink-0 (§11.7).
+- **B2 — AddTreePanel kompresja (§12.4)**: Zapisz/Anuluj na GÓRZE panelu; arrow pad + centralny przycisk „odśwież pozycję do GPS" (wyszarzony gdy GPS nieaktywny — obecnie `useGeolocation` daje position/loading/error); zapamiętywanie ostatnich danych (gatunek/obwód — np. per projekt w Dexie + nowa wersja schematu wg §11.7); input obwodu z +/− po bokach. testidy: `panel-save`, `panel-cancel`, gps-refresh, circumference-minus/plus.
+- **B3 — kontrolki mapy (§12.5)**: attribution + scale w LEWYM GÓRNYM (maplibre AttributionControl compact=false position top-left; ScaleControl pod nim); zoom + compass większe (custom NavigationControl lub CSS); przycisk „skaluj mapę do 20 m" ( „czerwony" gdy GPS nieaktywny → klik = modal uprawnień + troubleshooting GPS); aktualna pozycja jako mały celownik (marquer DOM, pointer-events none, nie koliduje z edycją pinezki).
+- **B4 — mobilny split panel (§12.6)**: modale → wyśrodkowane (desktop) vs dolna połowa (mobile, mapa przesuwa się DO GÓRY — nie nakryta): dotyczy AddTreePanel (z B2) i TreeListPanel; przycisk „dodaj drzewo" (zielony, prawy) i „lista drzew" (lewy) w widoku mapy. Zawartość fazy A (Header chip, FAB, `add-tree-panel` bottom-sheet) pozostaje; B4 zmienia proporcje na 50/50 zamiast 62vh.
+
+### Statystyki fazy A
+
+Commity (atomowe): `2481e36` (format + **razem z nim usunięcie SearchBox/`lib/search.ts`/`HomePage`/unit+e2e search specs** — świadomie, netto 823 linii deletions w 6 plikach), `fc7bb96` (db/store helpers), `bc9ffd3` (appStore), `56c2067` (routing), `523587d` (Header + delete SearchBox załączony tam przez pierwszy `git rm`), `0557ea2` (unit StartPage/AppPage/App), `fc77677` (ProjectsPage nav na /app), `1bf652d` (fix ensureProjectsLoaded race), `54f75dc` (fixture 468B), `ddde553`+`88e6014` (e2e migracja drzew + navigation/map/multi-parcel/settings).
+
+Pliki src fazy A: `App.tsx`, `pages/StartPage.tsx`, `pages/AppPage.tsx`, `components/layout/Header.tsx`, `stores/appStore.ts`, `stores/projectStore.ts`, `db/schema.ts`, `lib/format.ts`, `pages/ProjectsPage.tsx` (nav links), `pages/SettingsPage.tsx` (kazany kotw. link), deleted: `HomePage.tsx`, `SearchBox.tsx`, `lib/search.ts`.
+
+---
+
 ## Frontend (rename projektu) — branch `feat/rename-project`, worktree `/root/wt-rename` (2026-10-09)
 
 Commity (atomowe): `6ec14b1` → `b7eee30` → `6cbacbe` → `587beb8` → `2f0dd2b` (+ `fix(e2e)` fixture).
@@ -835,3 +890,51 @@ Widok na cały kraj (zoom ≤14) rysował wcześniej ~178k działek PMTiles
 - 623f58e fix: układ stron PDF — paginacja tabel i koniec nakładania sekcji
 - 60631a9 fix: kompas — lustrzany kierunek igły przy obrocie mapy
 - c540c3d feat: podgląd SVG pierwszej strony PDF w dialogu eksportu
+
+## Redesign v2 — B2 (kompresja AddTreePanel, §12.4) — branch `feat/v2-b2`, worktree `/root/wt-v2-b2` (2026-10-12)
+
+Dostarczone (6 commitów: b699e75→fb22705→3490fb4→7f86dd7→78ca73e→b4e68ba): **Zapisz/Anuluj na GÓRZE panelu** w `add-tree-header` (testidy `panel-save`/`panel-cancel` bez zmian; X `panel-close` usunięty — mobile zamyka drag handle, desktop Anuluj); mobile bottom-sheet **50vh** (było 62vh), desktop sidebar o wysokości treści (sm:h-auto); ArrowPad — **centralny `panel-gps-refresh`** (LocateFixed, disabled bez GPS, pulse 600 ms, klik = useGps + toast „Pozycja odświeżona z GPS"); TreeForm — **obwód z −/+ po bokach** (`circumference-minus/plus`, krok 5 cm, clamp 0–1000, 44px); **pamięć gatunku/obwodu per projekt** — po zapisie (add+edit) persist do localStorage `wycinka:lastTree:<projectId>`, `startPlacing` prefiliuje draft (args.species ma priorytet). **Decyzja: localStorage zamiast nowej wersji Dexie §11.7** — dane tylko UX-owe, zero migracji/backupu. Adaptacje cudzych plików: `mobile-panel.spec.ts` progi heightRatio 0.55–0.65 → 0.45–0.55 (linia 114–115, granica z B4). Touch: przycisk GPS/mock GPS w E2E — `new GeolocationPositionError()` NIE wywołuje error callback w headless (pomańska 'error'): używać plain object; to samo uwaga dla B3 (czerwony przycisk GPS). Gates: typecheck ✓ / lint ✓ / unit **537/537** (+17) / coverage **93.7% lines / 89.87% branches** global (AddTreePanel 88.2, ArrowPad 96.1, TreeForm 97.4, treeStore 84.9) / build ✓ / **test:e2e 44/44** (6 nowych; run×2: 1 flaky pre-existing `snap-vertex` zaliczony na retry — odnotowany wcześniej w STATUS). Strand: pulse na pinezce (GeoJSON) pominięty — feedback = pulse na przycisku + toast; ew. dopieścić w B3/B4 z pomocą MapPage prop.
+
+
+---
+
+## Redesign v2 — faza B3 (kontrolki mapy i pozycja GPS §12.5) — branch `feat/v2-b3`, worktree `/root/wt-v2-b3` (2026-10-12)
+
+Agent: frontend B3. Bazuje na faza A (`feat/app-redesign-v2`). Nie mergować — nadzorca.
+
+### Dostarczone
+
+- **Attribution + skala LEWY GÓRNY (§12.5)**: `attributionControl: false` w konstruktorze + `map.addControl(new AttributionControl({compact:false}), 'top-left')`; ScaleControl (metric) zaraz pod nim (stack przez `.maplibregl-ctrl{clear:both}`). testidy na DOM maplibre przez `tagMaplibreControls()` (`mapControlUtils.ts`, querySelector w kontenerze mapy): `map-attribution`, `map-scale`, `map-zoom-in`, `map-zoom-out`, `map-compass`.
+- **Zoom + kompas większe**: `.maplibregl-ctrl-group > button` 29px → **44px** (touch target §11.7), ikony przez `background-size: contain` (w maplibre v4 ikonki to osobne SVG 29×29, nie sprite — bezpieczne skalowanie). Nowy `MapView.css`.
+- **„Skaluj mapę do 20 m"** (`MapControls.tsx`, przycisk 44px top-right pod nav group, `top-[152px]`):
+  - bez GPS → **czerwony** (`bg-red-600`); klik niezależnie od stanu — świadomie **bez `aria-disabled`** (Playwright traktuje go jako brak actionability, a wymóg każe otwierać modal z czerwonego); stan nieaktywności w `data-active` + klasa;
+  - bez GPS klik → **`GpsTroubleshootModal`**: opis uprawnień + 4 kroki PL + link do pełnej instrukcji + „Spróbuj ponownie" (`gps-troubleshoot-retry`) → `useGeolocation.refresh`;
+  - z GPS → biały; klik = `flyTo` na pozycję.
+- **Formuła zoomu 20 m** (`mapControlUtils.zoomForScale20M`): **20 m = 60% krótszego boku viewportu** → `mpp = 20 / (0.6·min(w,h))`; `zoom = log2(40075016.686·cos(φ) / (256·mpp))`, clamp ≤22. Spójna z maplibre ScaleControl (`mpp = C·cosφ / (256·2^zoom)`). Dla 1280×720 / φ≈52.1° → **zoom ≈ 20.99**. Heurystyka „17.4" z opisu zadania daje 20 m na ~36 px (pasek skali) — celowo wybrana interpretacja „20 m pokrywa większość ekrana" (użytkownik operuje w skali jednego drzewa).
+- **Celownik GPS** (`GpsCrosshair.tsx`): maplibregl DOM Marker (anchor center), pierścień 14px + kropka (sky #0ea5e9, jak snap-indicator), `pointer-events: none` — nie koliduje z dragiem pinezki ani mapą. Marker tworzony raz per `[map, hasPosition]`; zmiana współrzędnych przez `setLngLat` (bez migotania przy watchu).
+- **Plug MapPage (minimalny)**: `<MapControls map={mapReady ? mapRef.current : null} position onRetryGps={refresh} />` + `<GpsCrosshair …/>` po MapClickHandler; jedno `useGeolocation` w MapPage — bez podwójnego GPS.
+
+### Reakcja łańcuchowa (upoważniona najmniejsza ścieżka)
+
+- Mocki `maplibre-gl` w 5 istniejących suitach (`App`, `AppPage`, `Header`, `MapClickHandler`, `MapPage`) nie miały `AttributionControl` (MapView dotąd go nie używał) — padłyby na `new maplibregl.AttributionControl`. W każdej dodana 1 linia `AttributionControl: vi.fn()` — mock lustruje realne API, zero zmian logiki. Jedyne pliki poza moim pierwotnym zakresem i tylko te linie.
+
+### Testy
+
+- Unit: 34 nowe → **548/548 green**. `MapControls.test.tsx` (13: red/inactive, modal open/retry/close/Escape, brak flyTo bez GPS, flyTo z pozycją i dokładnym zoomem — wartość liczona ręcznie wg wypisanej formuły, nie importem helpera), `GpsTroubleshootModal.test.tsx` (6), `GpsCrosshair.test.tsx` (6: create / update bez recreation / remove / brak przy null), `MapView.test.tsx` +3 (kolejność pozycji `['top-right','top-left','top-left']`, `attributionControl:false`, testidy w DOM po loadzie).
+- E2E **nowe** `tests/e2e/map-controls.spec.ts` (4, desktop 1280×720): attribution+scale bbox w lewym górnym **względem `map-container`** (header nad mapą przesuwa origin!), zoom/kompas ≥44px przy prawej krawędzi w pionowej grupie, czerwony przycisk → modal → retry zamyka; z GPS mockiem (initScript — dystans od natywnych permissions Playwrighta, wzór z trees.spec; pozycja Otwock 52.1036/21.5304): celownik visible, klik → `expect.poll getZoom ≈ 20.99 (±0.05)` + center ±0.001°. Determinizm §11.3: oczekiwanie `data-loaded="true"` + `expect.poll`, zero `waitForTimeout`.
+
+### E2E — kolizja portu 5173 z wt-v2-b4
+
+- `reuseExistingServer` podpioł się pod **dev-serwer agenta B4** (stary kod — bez moich komponentów), więc pierwszy „full" run był nieważny. Full suite odpalony na **własnym Vite 5199** (PORT w `tests/e2e/playwright.config.ts` zmieniony lokalnie — **niecommitowany, przywrócony na 5173**; ten sam wzór użył agent wt-ux-mobile). Nadal aktualna rekomendacja: per-worktree porty dla serwerów e2e.
+
+### Gates
+
+- typecheck ✓ / lint ✓ (--max-warnings=0) / **unit 548/548 ✓** (1 przejściowy flake w `ProjectsPage.test` pod obciążeniem; potem ×3 green) / **coverage 93.68% lines / 90.66% funcs / 90.14% branches** (progi 80/80/75/80 ✓) / **build ✓** (PWA precache 21) / **E2E: 41 passed + 1 flaky (multi-parcel „Działki: 2") pass na retry**.
+- Moduły B3 coverage 100% (`GpsCrosshair`, `GpsTroubleshootModal`, `MapControls`, `mapControlUtils`); `MapView.tsx` 86.7% lines (luki leżą poza sekcją kontroli — dziedzictwo z poprzednich faz), `MapPage.tsx` 86.15% (plug pokryty). `coverage/coverage-summary.txt` dołączony (dir gitignored).
+
+### Uwagi dla innych / nadzorcy
+
+- **Kolizja overlay top-left**: `map-overlays` (ParcelCard, aside `left-4 top-4` z MapPage) wizualnie nachodzi na attribution/scale w lewym górnym. Nie rozwiązałem — layout overlay'ów jest w zakresie B4/§12.6. Do decyzji nadzorcy: przesunięcie aside pod skalę albo offset kontrolki.
+- **Pinezka vs celownik z-index**: pinezka to GeoJSON circle na canvasie, celownik to DOM Marker — DOM zawsze wygrywa z canvas, więc przy GPS≈pinezka celownik rysuje się PONAD pinezką (mimo wymogu „najlepiej odwrotnie"). Opłata za zalecany „DOM Marker najlepszy"; alternatywa = źródło GeoJSON celownika w stylu mapy (mapStyle.ts — zamrożony dla mnie).
+- `mapStyle.ts` **nie ruszony** (minzoom konstanty — faza A'); logika PMTiles / click / snap-drag / pendingDrag w MapView nietknięta.
+- Zero `console.log`, zero TODO w kodzie produkcyjnym.

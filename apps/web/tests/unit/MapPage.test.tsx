@@ -8,6 +8,28 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useTreeStore } from '@/stores/treeStore';
 import { addTree, createProject, db } from '@/db/schema';
 
+type MediaListener = () => void;
+
+const mediaQueryState = vi.hoisted(() => ({
+  matches: false,
+  listeners: [] as MediaListener[],
+}));
+
+function installMatchMedia(matches: boolean): void {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn((_type: string, listener: MediaListener) => {
+      mediaQueryState.listeners.push(listener);
+    }),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: () => false,
+  }));
+}
+
 const { mapInstance, popupMock } = vi.hoisted(() => {
   const mapInstance = {
     on: vi.fn(),
@@ -45,6 +67,7 @@ vi.mock('maplibre-gl', () => {
     default: {
       Map: MapMock,
       NavigationControl: vi.fn(),
+      AttributionControl: vi.fn(),
       ScaleControl: vi.fn(),
       Marker: MarkerMock,
       Popup: popupMock,
@@ -103,6 +126,8 @@ async function seedProjectAndTree() {
 describe('MapPage', () => {
   beforeEach(() => {
     useMapStore.getState().reset();
+    mediaQueryState.matches = false;
+    installMatchMedia(false);
   });
 
   it('should render map container and nav', () => {
@@ -247,6 +272,7 @@ describe('MapPage', () => {
 
 describe('MapPage — tree list and marker popup', () => {
   beforeEach(async () => {
+    installMatchMedia(false);
     await db.delete();
     await db.open();
     useMapStore.getState().reset();
@@ -395,5 +421,108 @@ describe('MapPage — tree list and marker popup', () => {
     await user.click(screen.getByTestId('pdf-export-toggle'));
     expect(screen.getByTestId('pdf-export-dialog')).toBeInTheDocument();
     expect(screen.getByText('Eksport PDF')).toBeInTheDocument();
+  });
+});
+
+describe('MapPage — mobile split panel (B4)', () => {
+  beforeEach(async () => {
+    await db.delete();
+    await db.open();
+    useMapStore.getState().reset();
+    useProjectStore.getState().clear();
+    useTreeStore.getState().clear();
+    mediaQueryState.matches = false;
+    installMatchMedia(false);
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+  });
+
+  it('should not render the panel spacer on desktop even when the list is open', async () => {
+    const user = userEvent.setup();
+    await seedProjectAndTree();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId('tree-list-toggle'));
+    expect(screen.getByTestId('tree-list-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('panel-spacer')).not.toBeInTheDocument();
+  });
+
+  it('should squeeze the map with a 50dvh spacer when the list opens on mobile', async () => {
+    const user = userEvent.setup();
+    installMatchMedia(true);
+    await seedProjectAndTree();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('panel-spacer')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('tree-list-toggle'));
+    const spacer = screen.getByTestId('panel-spacer');
+    expect(spacer).toHaveAttribute('data-panel-kind', 'list');
+    expect(spacer.className).toContain('h-[50dvh]');
+    expect(spacer.className).toContain('min-h-[300px]');
+  });
+
+  it('should allocate the split to the add-tree panel while placing and hide the list toggle on mobile', async () => {
+    installMatchMedia(true);
+    await seedProjectAndTree();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    await userEvent.setup().click(screen.getByTestId('fab-add-tree'));
+    const spacer = screen.getByTestId('panel-spacer');
+    expect(spacer).toHaveAttribute('data-panel-kind', 'add-tree');
+    expect(screen.queryByTestId('tree-list-toggle')).not.toBeInTheDocument();
+  });
+
+  it('should not split the map on desktop while placing', async () => {
+    const user = userEvent.setup();
+    await seedProjectAndTree();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId('fab-add-tree'));
+    expect(screen.queryByTestId('panel-spacer')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tree-list-toggle')).not.toBeInTheDocument();
+  });
+
+  it('should close the tree list when the add-tree FAB is pressed on mobile', async () => {
+    const user = userEvent.setup();
+    installMatchMedia(true);
+    await seedProjectAndTree();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByTestId('tree-list-toggle'));
+    expect(useTreeStore.getState().listPanelOpen).toBe(true);
+    await user.click(screen.getByTestId('fab-add-tree'));
+    expect(useTreeStore.getState().listPanelOpen).toBe(false);
+    expect(useTreeStore.getState().mode).toBe('placing');
+  });
+
+  it('should label the list toggle with the tree count', async () => {
+    await seedProjectAndTree();
+    render(
+      <MemoryRouter initialEntries={['/map']}>
+        <MapPage />
+      </MemoryRouter>,
+    );
+    const toggle = screen.getByTestId('tree-list-toggle');
+    expect(toggle).toHaveTextContent('Drzewa');
+    expect(toggle).toHaveTextContent('1');
   });
 });

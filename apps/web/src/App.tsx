@@ -1,11 +1,10 @@
 import { Suspense, lazy } from 'react';
 import { Route, Routes } from 'react-router-dom';
-import Header from '@/components/layout/Header';
-import HomePage from '@/pages/HomePage';
-import NotFound from '@/pages/NotFound';
+import StartPage from '@/pages/StartPage';
+import AppPage from '@/pages/AppPage';
 import ProjectsPage from '@/pages/ProjectsPage';
+import NotFound from '@/pages/NotFound';
 
-const MapPage = lazy(() => import('@/pages/MapPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 
 function PageFallback(): JSX.Element {
@@ -22,19 +21,16 @@ function PageFallback(): JSX.Element {
 
 export default function App(): JSX.Element {
   return (
-    <div className="flex h-full w-full flex-col">
-      <Header />
-      <main className="relative flex-1 overflow-hidden">
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/map" element={<MapPage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      </main>
+    <div className="h-full w-full">
+      <Suspense fallback={<PageFallback />}>
+        <Routes>
+          <Route path="/" element={<StartPage />} />
+          <Route path="/app" element={<AppPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </div>
   );
 }

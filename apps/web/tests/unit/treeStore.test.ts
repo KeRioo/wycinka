@@ -3,7 +3,6 @@ import { addTree, createProject, db } from '@/db/schema';
 import { draftPosition, useTreeStore } from '@/stores/treeStore';
 
 const GPS = { lat: 52.2297, lng: 21.0122, accuracy: 8 };
-
 describe('useTreeStore', () => {
   beforeEach(async () => {
     db.delete();
@@ -351,5 +350,101 @@ describe('useTreeStore', () => {
     expect(useTreeStore.getState().trees).toEqual([]);
     expect(useTreeStore.getState().selectedTreeId).toBeNull();
     expect(useTreeStore.getState().listPanelOpen).toBe(false);
+  });
+});
+
+describe('useTreeStore — zapamiętywane dane ostatniego drzewa', () => {
+  beforeEach(async () => {
+    db.delete();
+    await db.open();
+    useTreeStore.getState().clear();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+    window.localStorage.clear();
+  });
+
+  it('should prefill draft with remembered defaults when startPlacing', () => {
+    useTreeStore.setState({ activeProjectId: 'proj-1' });
+    window.localStorage.setItem(
+      'wycinka:lastTree:proj-1',
+      JSON.stringify({ species: 'Sosna', circumference: 90 }),
+    );
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    const pending = useTreeStore.getState().pending;
+    expect(pending?.species).toBe('Sosna');
+    expect(pending?.circumference).toBe(90);
+    expect(pending?.lat).toBe(GPS.lat);
+    expect(pending?.manualOffset).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it('should override remembered defaults with explicit species arg', () => {
+    useTreeStore.setState({ activeProjectId: 'proj-1' });
+    window.localStorage.setItem(
+      'wycinka:lastTree:proj-1',
+      JSON.stringify({ species: 'Sosna', circumference: 90 }),
+    );
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS, species: 'Buk' });
+    const pending = useTreeStore.getState().pending;
+    expect(pending?.species).toBe('Buk');
+    expect(pending?.circumference).toBe(90);
+  });
+
+  it('should_not_prefill_when_no_remembered_defaults', () => {
+    useTreeStore.setState({ activeProjectId: 'proj-empty' });
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    const pending = useTreeStore.getState().pending;
+    expect(pending?.species).toBe('');
+    expect(pending?.circumference).toBe(0);
+  });
+
+  it('should ignore corrupted defaults in localStorage', () => {
+    useTreeStore.setState({ activeProjectId: 'proj-1' });
+    window.localStorage.setItem('wycinka:lastTree:proj-1', '{ nie-poprawny json');
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    const pending = useTreeStore.getState().pending;
+    expect(pending?.species).toBe('');
+    expect(pending?.circumference).toBe(0);
+  });
+
+  it('should ignore defaults failing schema validation', () => {
+    useTreeStore.setState({ activeProjectId: 'proj-1' });
+    window.localStorage.setItem(
+      'wycinka:lastTree:proj-1',
+      JSON.stringify({ species: '', circumference: 99999 }),
+    );
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    const pending = useTreeStore.getState().pending;
+    expect(pending?.species).toBe('');
+    expect(pending?.circumference).toBe(0);
+  });
+
+  it('should persist species and circumference to localStorage after save', async () => {
+    const project = await createProject({ name: 'P' });
+    await useTreeStore.getState().loadTrees(project.id);
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    useTreeStore.getState().setSpecies('Buk');
+    useTreeStore.getState().setCircumference(77);
+    await useTreeStore.getState().save(project.id);
+    const raw = window.localStorage.getItem(`wycinka:lastTree:${project.id}`);
+    expect(raw).not.toBeNull();
+    expect(JSON.parse(raw ?? '')).toEqual({ species: 'Buk', circumference: 77 });
+  });
+
+  it('should reuse persisted defaults on the next startPlacing after save', async () => {
+    const project = await createProject({ name: 'P' });
+    await useTreeStore.getState().loadTrees(project.id);
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    useTreeStore.getState().setSpecies('Jodła');
+    useTreeStore.getState().setCircumference(64);
+    await useTreeStore.getState().save(project.id);
+    useTreeStore.getState().startPlacing({ gpsPosition: GPS });
+    const pending = useTreeStore.getState().pending;
+    expect(pending?.species).toBe('Jodła');
+    expect(pending?.circumference).toBe(64);
   });
 });

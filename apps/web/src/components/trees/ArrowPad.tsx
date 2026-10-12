@@ -1,5 +1,5 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Crosshair } from 'lucide-react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, LocateFixed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ArrowPadProps {
@@ -9,6 +9,8 @@ interface ArrowPadProps {
   dx?: number;
   dy?: number;
 }
+
+const PULSE_MS = 600;
 
 const REPEAT_DELAY_MS = 350;
 const REPEAT_INTERVAL_MS = 110;
@@ -91,11 +93,17 @@ export default function ArrowPad({
   dy = 0,
 }: ArrowPadProps): JSX.Element {
   const repeatRef = useRef<RepeatState>({ timer: null, interval: null });
+  const [pulsing, setPulsing] = useState<boolean>(false);
+  const pulseTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const state = repeatRef.current;
     return () => {
       clearRepeat(state);
+      if (pulseTimerRef.current !== null) {
+        window.clearTimeout(pulseTimerRef.current);
+        pulseTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -114,6 +122,21 @@ export default function ArrowPad({
     clearRepeat(repeatRef.current);
   };
 
+  const handleUseGps = (): void => {
+    if (onUseGps === undefined) {
+      return;
+    }
+    onUseGps();
+    if (pulseTimerRef.current !== null) {
+      window.clearTimeout(pulseTimerRef.current);
+    }
+    setPulsing(true);
+    pulseTimerRef.current = window.setTimeout(() => {
+      setPulsing(false);
+      pulseTimerRef.current = null;
+    }, PULSE_MS);
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex flex-col items-center gap-2">
@@ -130,22 +153,23 @@ export default function ArrowPad({
             onPress={startRepeat}
             onRelease={stopRepeat}
           />
-          {onUseGps !== undefined ? (
-            <button
-              type="button"
-              data-testid="use-gps"
-              aria-label="Użyj GPS"
-              onClick={onUseGps}
-              className={cn(
-                'flex h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-forest-300 bg-forest-50 text-forest-800 transition-colors',
-                'hover:bg-forest-100 active:bg-forest-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500',
-              )}
-            >
-              <Crosshair aria-hidden="true" className="h-6 w-6" />
-            </button>
-          ) : (
-            <div className="h-14 w-14" aria-hidden="true" />
-          )}
+          <button
+            type="button"
+            data-testid="panel-gps-refresh"
+            aria-label="Odśwież pozycję drzewa do aktualnej lokalizacji GPS"
+            disabled={onUseGps === undefined}
+            onClick={handleUseGps}
+            className={cn(
+              'flex h-14 w-14 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500',
+              'disabled:cursor-not-allowed disabled:opacity-40',
+              onUseGps !== undefined
+                ? 'border-forest-300 bg-forest-50 text-forest-800 hover:bg-forest-100 active:bg-forest-200'
+                : 'border-stone-200 bg-stone-100 text-stone-400',
+              pulsing ? 'animate-pulse' : '',
+            )}
+          >
+            <LocateFixed aria-hidden="true" className="h-6 w-6" />
+          </button>
           <ArrowButton
             direction="right"
             label="Przesuń o 0.25 m na wschód"

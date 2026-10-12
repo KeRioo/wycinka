@@ -86,11 +86,18 @@
 ### ✅ Milestone 10 — Real EGiB data (DOSTARCZONE — GPKG powiat otwocki, opendata fallback)
 ### ✅ Dodatkowe (2026-10-09): multi-parcel, mobile bottom-sheet, GPS averaging, snap-to-vertex, fitBounds, SearchBox TERYT, rename projektu, map layer perf, PDF fix
 
+### ✅ Redesign v2 (DOSTARCZONE 2026-10-12 — patrz AGENTS.md §12; branch `feat/app-redesign-v2`)
+- Szkielet: launcher `/` (Nowy projekt / Ostatnie ≤3 z statystykami + rel. czasem / Import), AppPage `/app` = cała aplikacja-mapa, Header chip + popup menu, SearchBox TERYT usunięty, appStore modale.
+- Modale: Ustawienia (bez wydruków) i Raporty (prefs wydruków per projekt + podgląd SVG) — per projekt w Dexie.
+- AddTreePanel: Zapisz/Anuluj na górze, GPS refresh w arrow pad, zapamiętywanie ostatnich danych, +/− obwód.
+- Mapa: attribution+skala top-left, większe kontrolki, „20 m do GPS" (czerwony → modal troubleshooting), celownik GPS.
+- Mobile: split 50/50 (dodaj drzewo / lista drzew), mapa przesuwa się do góry, modale wyśrodkowane+zaciemnione (AppModalShell).
+- Gates: unit 605/605 (93.7% lin), e2e 55/55 zero flaky (multi-parcel ustabilizowany), build ✓.
+
 ### Pozostały kamień milowy — Deployment & stabilizacja live (SRV01) ← DALEJ
 - **Estymata:** 2-4h
-- **Scope:** redeploy web+api z main `bf4a72e` (multi-parcel, searchbox, perf, PDF fix), zielone CI (`7cd7380` fix + push), ręczny happy-path na prodzkim URL, obserwacja CI 2-3 runs pod kątem flake (#B, #C, #D)
-- **Agent:** nadzorca (+ infra ewentualnie)
-- **Kroki:** (1) push main; (2) sprawdź CI; (3) ssh srv01 → `git pull && docker compose build web api && docker compose up -d`; (4) clearBrowserCache + rceed happy-path: klik działka → ➕ do projektu → chipsy → PDF; (5) searchbox TERYT na live działa (backend `/parcel?teryt` vurify)
+- **Scope:** redeploy z redesignem v2, weryfikacja happy-path żywcem na prodzkim URL (launcher → projekt → mapa → drzewo → PDF), obserwacja CI
+- **Kroki:** (1) merge redesign → main + push; (2) CI; (3) srv01 pull + build + up; (4) live verify w CDP (uwaga: cache — §11.5).
 
 ---
 

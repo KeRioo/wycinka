@@ -1,4 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { openProjectViaLauncherWithFab, waitForMapIdle } from './helpers';
+
+const MINIMAL_PMTILES = readFileSync(
+  join(new URL('.', import.meta.url).pathname, 'fixtures/minimal.pmtiles'),
+);
 
 function parcelBody(id: string, area: number): Record<string, unknown> {
   return {
@@ -37,26 +44,11 @@ function parcelBody(id: string, area: number): Record<string, unknown> {
 }
 
 async function ensureProject(page: Page): Promise<void> {
-  await page.goto('/map');
-  await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(500);
-  const createBtn = page.getByTestId('create-first-project');
-  if (await createBtn.isVisible().catch(() => false)) {
-    await createBtn.click({ force: true });
-    await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
-  }
-  await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
+  await openProjectViaLauncherWithFab(page);
 }
 
 test.describe('Multi-parcel project', () => {
   test.beforeEach(async ({ context }) => {
-    await context.addInitScript(() => {
-      try {
-        indexedDB.deleteDatabase('wycinka');
-      } catch {
-        // ignore
-      }
-    });
     await context.route('**/api/v1/version', (route) => {
       void route.fulfill({
         status: 200,
@@ -70,7 +62,11 @@ test.describe('Multi-parcel project', () => {
       });
     });
     await context.route('**/api/v1/pmtiles/**', (route) => {
-      void route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      void route.fulfill({
+        status: 200,
+        contentType: 'application/octet-stream',
+        body: MINIMAL_PMTILES,
+      });
     });
     await context.route('**/api/v1/parcel*', (route) => {
       const url = new URL(route.request().url());
@@ -122,13 +118,38 @@ test.describe('Multi-parcel project', () => {
   }) => {
     await ensureProject(page);
 
-    const container = page.locator('[data-testid="map-container"]').first();
-    const box = await container.boundingBox();
-    if (box === null) {
-      throw new Error('Mapa nie ma wymiarów');
-    }
+    // Deterministyczne kliki: projekcja punktów w planie <center> mapy
+    // (frakcje pikselowe viewportu były zależne od kamery i wchłaniały flake,
+    // klik podparł się na pozycji fitBounds z pierwszej działki).
+    const clickAt = async (lng: number, lat: number): Promise<void> => {
+      await page.evaluate(() => {
+        const map = (
+          window as unknown as Record<string, { jumpTo(opts: { zoom: number }): void } | undefined>
+        ).wycinkaMap;
+        map?.jumpTo({ zoom: 14 });
+      });
+      await waitForMapIdle(page);
+      const point = await page.evaluate(
+        ({ ln, lt }) => {
+          const map = (
+            window as unknown as Record<
+              string,
+              { project(lngLat: [number, number]): { x: number; y: number }; getContainer(): HTMLElement } | undefined
+            >
+          ).wycinkaMap;
+          if (map === undefined) {
+            throw new Error('map not ready');
+          }
+          const project = map.project([ln, lt]);
+          const rect = map.getContainer().getBoundingClientRect();
+          return { x: rect.left + project.x, y: rect.top + project.y };
+        },
+        { ln: lng, lt: lat },
+      );
+      await page.mouse.click(point.x, point.y);
+    };
 
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.25);
+    await clickAt(21.0065, 52.2325);
     const addNorth = page.getByTestId('add-parcel-to-project');
     await expect(addNorth).toBeVisible({ timeout: 10_000 });
     await addNorth.click();
@@ -142,19 +163,23 @@ test.describe('Multi-parcel project', () => {
       .click();
     await expect(page.getByTestId('add-parcel-to-project')).toHaveCount(0);
 
-    await page.mouse.click(box.x + (box.width / 4) * 3, box.y + box.height * 0.75);
+    await clickAt(21.0185, 52.229);
     const addSouth = page.getByTestId('add-parcel-to-project');
     await expect(addSouth).toBeVisible({ timeout: 10_000 });
     await addSouth.click();
+    await expect(page.getByRole('button', { name: /Usuń z projektu/i })).toBeVisible({
+      timeout: 5_000,
+    });
 
-    await page.getByRole('link', { name: /Projekty/i }).click();
+    await page.goto('/projects');
     await expect(page.getByTestId('active-project-panel')).toBeVisible();
     await expect(page.getByTestId('project-parcel-count')).toHaveText('Działki: 2');
     await expect(page.getByTestId('parcel-chip-141201_1.0001.6501')).toBeVisible();
     await expect(page.getByTestId('parcel-chip-141201_1.0001.6502')).toBeVisible();
 
-    await page.getByRole('link', { name: /Mapa/i }).click();
+    await page.goto('/app');
     await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('fab-add-tree').click({ timeout: 10_000 });
     await expect(page.getByTestId('add-tree-panel')).toBeVisible();

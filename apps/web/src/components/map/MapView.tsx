@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl, { type Map as MaplibreMap, type MapLayerMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import './MapView.css';
 import { buildStyleWithPMTiles } from './mapStyle';
+import { tagMaplibreControls } from './mapControlUtils';
 import { usePMTiles } from './usePMTiles';
 import { usePendingMarkerDrag } from './usePendingDrag';
 import type { LatLng } from '@/lib/geo';
@@ -99,11 +101,13 @@ export default function MapView({
       style: buildStyleWithPMTiles(pmtilesUrl),
       center: [initialCenter[0], initialCenter[1]],
       zoom: initialZoom,
-      attributionControl: { compact: true },
+      attributionControl: false,
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
-    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    map.addControl(new maplibregl.AttributionControl({ compact: false }), 'top-left');
+    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'top-left');
+    tagMaplibreControls(containerRef.current);
 
     if (import.meta.env.MODE !== 'production') {
       (window as unknown as Record<string, unknown>).wycinkaMap = map;

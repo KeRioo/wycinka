@@ -193,6 +193,52 @@ export async function listProjects(): Promise<Project[]> {
   return db.projects.orderBy('createdAt').reverse().toArray();
 }
 
+export async function touchProject(id: string): Promise<Project> {
+  const existing = await db.projects.get(id);
+  if (existing === undefined) {
+    throw new Error(`Projekt ${id} nie istnieje`);
+  }
+  const next: Project = { ...existing, updatedAt: new Date() };
+  await db.projects.put(next);
+  return next;
+}
+
+export interface RecentProjectStats {
+  treeCount: number;
+  parcelNumbers: string[];
+  locality: string | null;
+}
+
+export async function getProjectStats(projectId: string): Promise<RecentProjectStats> {
+  const [treeCount, parcelRows] = await Promise.all([
+    db.trees.where('projectId').equals(projectId).count(),
+    db.project_parcels.where('projectId').equals(projectId).toArray(),
+  ]);
+  parcelRows.sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
+  const firstRow = parcelRows[0] as ProjectParcel | undefined;
+  return {
+    treeCount,
+    parcelNumbers: parcelRows.map((row) => row.snapshot.number),
+    locality:
+      firstRow !== undefined
+        ? (firstRow.snapshot.commune || firstRow.snapshot.region_name || null)
+        : null,
+  };
+}
+
+export async function listRecentProjects(limit: number): Promise<Project[]> {
+  return db.projects.orderBy('updatedAt').reverse().limit(limit).toArray();
+}
+
+export async function getRecentProjectsWithStats(
+  limit: number,
+): Promise<{ project: Project; stats: RecentProjectStats }[]> {
+  const projects = await listRecentProjects(limit);
+  return Promise.all(
+    projects.map(async (project) => ({ project, stats: await getProjectStats(project.id) })),
+  );
+}
+
 export async function getProject(id: string): Promise<Project | undefined> {
   return db.projects.get(id);
 }

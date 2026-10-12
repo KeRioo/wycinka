@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openProjectViaLauncher } from './helpers';
 
 type MapInit = Record<string, MapHandle | undefined>;
 
@@ -23,8 +24,7 @@ async function waitForMapIdle(page: Page): Promise<void> {
 
 test.describe.serial('Warstwy działek - optymalizacja renderingu', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/map');
-    await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
+    await openProjectViaLauncher(page);
     await page.waitForFunction(() => (window as unknown as MapInit).wycinkaMap !== undefined);
     await waitForMapIdle(page);
   });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openProjectViaLauncherWithFab } from './helpers';
 
 function buildMockPmtiles(): Uint8Array {
   const bytes = new Uint8Array(133);
@@ -54,25 +55,7 @@ async function serveMockPmtiles(context: import('@playwright/test').BrowserConte
 }
 
 async function ensureProjectAndFab(page: Page): Promise<void> {
-  await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(500);
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const fabVisible = await page
-      .getByTestId('fab-add-tree')
-      .isVisible()
-      .catch(() => false);
-    if (!fabVisible) {
-      const createBtn = page.getByTestId('create-first-project');
-      if (await createBtn.isVisible().catch(() => false)) {
-        await createBtn.click({ force: true });
-        await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
-      }
-      await page.waitForTimeout(1000);
-    } else {
-      break;
-    }
-  }
-  await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
+  await openProjectViaLauncherWithFab(page);
 }
 
 async function saveFirstTree(page: Page): Promise<void> {
@@ -137,7 +120,6 @@ test.describe('Tree list and marker popup', () => {
   });
 
   test('should list saved trees and open details popup from a row', async ({ page }) => {
-    await page.goto('/map');
     await saveFirstTree(page);
 
     await page.getByTestId('tree-list-toggle').click();
@@ -155,7 +137,6 @@ test.describe('Tree list and marker popup', () => {
   });
 
   test('should start edit mode from the popup', async ({ page }) => {
-    await page.goto('/map');
     await saveFirstTree(page);
 
     await page.getByTestId('tree-list-toggle').click();
@@ -168,7 +149,6 @@ test.describe('Tree list and marker popup', () => {
   });
 
   test('should delete a tree from the list panel', async ({ page }) => {
-    await page.goto('/map');
     await saveFirstTree(page);
 
     await page.getByTestId('tree-list-toggle').click();
@@ -180,7 +160,6 @@ test.describe('Tree list and marker popup', () => {
   });
 
   test('should open the popup when a tree marker is clicked on the map', async ({ page }) => {
-    await page.goto('/map');
     await saveFirstTree(page);
 
     await expect(page.getByTestId('map-container')).toHaveAttribute('data-loaded', 'true', {

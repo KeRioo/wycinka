@@ -1,5 +1,6 @@
 import { act, render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import maplibregl from 'maplibre-gl';
 import MapView from '@/components/map/MapView';
 
 const markerInstances: {
@@ -29,27 +30,26 @@ const mapInstance = {
   },
 };
 
-vi.mock('maplibre-gl', () => {
-  return {
-    default: {
-      Map: vi.fn().mockImplementation(() => mapInstance),
-      NavigationControl: vi.fn(),
-      ScaleControl: vi.fn(),
-      Marker: vi.fn().mockImplementation(() => {
-        const marker = {
-          setLngLat: vi.fn().mockReturnThis(),
-          addTo: vi.fn().mockReturnThis(),
-          remove: vi.fn(),
-          getElement: vi.fn().mockReturnValue(document.createElement('div')),
-        };
-        markerInstances.push(marker);
-        return marker;
-      }),
-      addProtocol: vi.fn(),
-      removeProtocol: vi.fn(),
-    },
-  };
-});
+vi.mock('maplibre-gl', () => ({
+  default: {
+    Map: vi.fn().mockImplementation(() => mapInstance),
+    NavigationControl: vi.fn(),
+    AttributionControl: vi.fn(),
+    ScaleControl: vi.fn(),
+    Marker: vi.fn().mockImplementation(() => {
+      const marker = {
+        setLngLat: vi.fn().mockReturnThis(),
+        addTo: vi.fn().mockReturnThis(),
+        remove: vi.fn(),
+        getElement: vi.fn().mockReturnValue(document.createElement('div')),
+      };
+      markerInstances.push(marker);
+      return marker;
+    }),
+    addProtocol: vi.fn(),
+    removeProtocol: vi.fn(),
+  },
+}));
 
 vi.mock('pmtiles', () => ({
   Protocol: vi.fn().mockImplementation(() => ({ tile: vi.fn() })),
@@ -229,5 +229,59 @@ describe('MapView pending drag with snap', () => {
       callLoadHandlers();
     });
     expect(getLayerEventHandler('trees-pending-circle', 'mousedown')).toBeUndefined();
+  });
+});
+
+describe('MapView kontrolki (§12.5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    markerInstances.length = 0;
+    mapInstance.addControl.mockImplementation(() => {
+      const container = document.querySelector<HTMLElement>('[data-testid="map-container"]');
+      if (container === null) {
+        return;
+      }
+      for (const className of [
+        'maplibregl-ctrl maplibregl-ctrl-attrib',
+        'maplibregl-ctrl-scale',
+        'maplibregl-ctrl-zoom-in',
+        'maplibregl-ctrl-zoom-out',
+        'maplibregl-ctrl-compass',
+      ]) {
+        const element = document.createElement('div');
+        element.className = className;
+        container.appendChild(element);
+      }
+    });
+  });
+
+  it('should disable the built-in attribution control and add a full one at top-left', () => {
+    render(<MapView pmtilesUrl="http://localhost/pmtiles/dzialki" />);
+    expect(maplibregl.Map).toHaveBeenCalledWith(
+      expect.objectContaining({ attributionControl: false }),
+    );
+    expect(maplibregl.AttributionControl).toHaveBeenCalledWith({ compact: false });
+    expect(mapInstance.addControl).toHaveBeenCalledWith(expect.anything(), 'top-left');
+  });
+
+  it('should place navigation top-right and attribution then scale in the top-left stack', () => {
+    render(<MapView pmtilesUrl="http://localhost/pmtiles/dzialki" />);
+    const positions = mapInstance.addControl.mock.calls.map((call) => call[1]);
+    expect(positions).toEqual(['top-right', 'top-left', 'top-left']);
+    expect(maplibregl.ScaleControl).toHaveBeenCalledWith({ unit: 'metric' });
+    expect(maplibregl.NavigationControl).toHaveBeenCalledWith({ showCompass: true });
+  });
+
+  it('should tag rendered maplibre controls with stable testids', () => {
+    const { container } = render(<MapView pmtilesUrl="http://localhost/pmtiles/dzialki" />);
+    for (const testId of [
+      'map-attribution',
+      'map-scale',
+      'map-zoom-in',
+      'map-zoom-out',
+      'map-compass',
+    ]) {
+      expect(container.querySelector(`[data-testid="${testId}"]`)).not.toBeNull();
+    }
   });
 });
