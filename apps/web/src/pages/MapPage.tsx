@@ -4,6 +4,8 @@ import maplibregl, { type Map as MaplibreMap } from 'maplibre-gl';
 import { List, FileDown, X } from 'lucide-react';
 import type { Parcel } from '@/services/api.types';
 import MapClickHandler from '@/components/map/MapClickHandler';
+import MapControls from '@/components/map/MapControls';
+import GpsCrosshair from '@/components/map/GpsCrosshair';
 import ParcelPopup, { type ParcelPopupAction } from '@/components/map/ParcelPopup';
 import AddTreePanel from '@/components/trees/AddTreePanel';
 import Fab from '@/components/trees/Fab';
@@ -269,6 +271,13 @@ export default function MapPage(): JSX.Element {
         treeLayer={treeLayer}
         onTreeClick={handleTreeClick}
       />
+
+      <MapControls
+        map={mapReady ? mapRef.current : null}
+        position={position}
+        onRetryGps={refresh}
+      />
+      <GpsCrosshair map={mapReady ? mapRef.current : null} position={position} />
 
       <aside
         data-testid="map-overlays"
