@@ -874,3 +874,46 @@ Widok na cały kraj (zoom ≤14) rysował wcześniej ~178k działek PMTiles
 - 623f58e fix: układ stron PDF — paginacja tabel i koniec nakładania sekcji
 - 60631a9 fix: kompas — lustrzany kierunek igły przy obrocie mapy
 - c540c3d feat: podgląd SVG pierwszej strony PDF w dialogu eksportu
+
+---
+
+## Redesign v2 — faza B3 (kontrolki mapy i pozycja GPS §12.5) — branch `feat/v2-b3`, worktree `/root/wt-v2-b3` (2026-10-12)
+
+Agent: frontend B3. Bazuje na faza A (`feat/app-redesign-v2`). Nie mergować — nadzorca.
+
+### Dostarczone
+
+- **Attribution + skala LEWY GÓRNY (§12.5)**: `attributionControl: false` w konstruktorze + `map.addControl(new AttributionControl({compact:false}), 'top-left')`; ScaleControl (metric) zaraz pod nim (stack przez `.maplibregl-ctrl{clear:both}`). testidy na DOM maplibre przez `tagMaplibreControls()` (`mapControlUtils.ts`, querySelector w kontenerze mapy): `map-attribution`, `map-scale`, `map-zoom-in`, `map-zoom-out`, `map-compass`.
+- **Zoom + kompas większe**: `.maplibregl-ctrl-group > button` 29px → **44px** (touch target §11.7), ikony przez `background-size: contain` (w maplibre v4 ikonki to osobne SVG 29×29, nie sprite — bezpieczne skalowanie). Nowy `MapView.css`.
+- **„Skaluj mapę do 20 m"** (`MapControls.tsx`, przycisk 44px top-right pod nav group, `top-[152px]`):
+  - bez GPS → **czerwony** (`bg-red-600`); klik niezależnie od stanu — świadomie **bez `aria-disabled`** (Playwright traktuje go jako brak actionability, a wymóg każe otwierać modal z czerwonego); stan nieaktywności w `data-active` + klasa;
+  - bez GPS klik → **`GpsTroubleshootModal`**: opis uprawnień + 4 kroki PL + link do pełnej instrukcji + „Spróbuj ponownie" (`gps-troubleshoot-retry`) → `useGeolocation.refresh`;
+  - z GPS → biały; klik = `flyTo` na pozycję.
+- **Formuła zoomu 20 m** (`mapControlUtils.zoomForScale20M`): **20 m = 60% krótszego boku viewportu** → `mpp = 20 / (0.6·min(w,h))`; `zoom = log2(40075016.686·cos(φ) / (256·mpp))`, clamp ≤22. Spójna z maplibre ScaleControl (`mpp = C·cosφ / (256·2^zoom)`). Dla 1280×720 / φ≈52.1° → **zoom ≈ 20.99**. Heurystyka „17.4" z opisu zadania daje 20 m na ~36 px (pasek skali) — celowo wybrana interpretacja „20 m pokrywa większość ekrana" (użytkownik operuje w skali jednego drzewa).
+- **Celownik GPS** (`GpsCrosshair.tsx`): maplibregl DOM Marker (anchor center), pierścień 14px + kropka (sky #0ea5e9, jak snap-indicator), `pointer-events: none` — nie koliduje z dragiem pinezki ani mapą. Marker tworzony raz per `[map, hasPosition]`; zmiana współrzędnych przez `setLngLat` (bez migotania przy watchu).
+- **Plug MapPage (minimalny)**: `<MapControls map={mapReady ? mapRef.current : null} position onRetryGps={refresh} />` + `<GpsCrosshair …/>` po MapClickHandler; jedno `useGeolocation` w MapPage — bez podwójnego GPS.
+
+### Reakcja łańcuchowa (upoważniona najmniejsza ścieżka)
+
+- Mocki `maplibre-gl` w 5 istniejących suitach (`App`, `AppPage`, `Header`, `MapClickHandler`, `MapPage`) nie miały `AttributionControl` (MapView dotąd go nie używał) — padłyby na `new maplibregl.AttributionControl`. W każdej dodana 1 linia `AttributionControl: vi.fn()` — mock lustruje realne API, zero zmian logiki. Jedyne pliki poza moim pierwotnym zakresem i tylko te linie.
+
+### Testy
+
+- Unit: 34 nowe → **548/548 green**. `MapControls.test.tsx` (13: red/inactive, modal open/retry/close/Escape, brak flyTo bez GPS, flyTo z pozycją i dokładnym zoomem — wartość liczona ręcznie wg wypisanej formuły, nie importem helpera), `GpsTroubleshootModal.test.tsx` (6), `GpsCrosshair.test.tsx` (6: create / update bez recreation / remove / brak przy null), `MapView.test.tsx` +3 (kolejność pozycji `['top-right','top-left','top-left']`, `attributionControl:false`, testidy w DOM po loadzie).
+- E2E **nowe** `tests/e2e/map-controls.spec.ts` (4, desktop 1280×720): attribution+scale bbox w lewym górnym **względem `map-container`** (header nad mapą przesuwa origin!), zoom/kompas ≥44px przy prawej krawędzi w pionowej grupie, czerwony przycisk → modal → retry zamyka; z GPS mockiem (initScript — dystans od natywnych permissions Playwrighta, wzór z trees.spec; pozycja Otwock 52.1036/21.5304): celownik visible, klik → `expect.poll getZoom ≈ 20.99 (±0.05)` + center ±0.001°. Determinizm §11.3: oczekiwanie `data-loaded="true"` + `expect.poll`, zero `waitForTimeout`.
+
+### E2E — kolizja portu 5173 z wt-v2-b4
+
+- `reuseExistingServer` podpioł się pod **dev-serwer agenta B4** (stary kod — bez moich komponentów), więc pierwszy „full" run był nieważny. Full suite odpalony na **własnym Vite 5199** (PORT w `tests/e2e/playwright.config.ts` zmieniony lokalnie — **niecommitowany, przywrócony na 5173**; ten sam wzór użył agent wt-ux-mobile). Nadal aktualna rekomendacja: per-worktree porty dla serwerów e2e.
+
+### Gates
+
+- typecheck ✓ / lint ✓ (--max-warnings=0) / **unit 548/548 ✓** (1 przejściowy flake w `ProjectsPage.test` pod obciążeniem; potem ×3 green) / **coverage 93.68% lines / 90.66% funcs / 90.14% branches** (progi 80/80/75/80 ✓) / **build ✓** (PWA precache 21) / **E2E: 41 passed + 1 flaky (multi-parcel „Działki: 2") pass na retry**.
+- Moduły B3 coverage 100% (`GpsCrosshair`, `GpsTroubleshootModal`, `MapControls`, `mapControlUtils`); `MapView.tsx` 86.7% lines (luki leżą poza sekcją kontroli — dziedzictwo z poprzednich faz), `MapPage.tsx` 86.15% (plug pokryty). `coverage/coverage-summary.txt` dołączony (dir gitignored).
+
+### Uwagi dla innych / nadzorcy
+
+- **Kolizja overlay top-left**: `map-overlays` (ParcelCard, aside `left-4 top-4` z MapPage) wizualnie nachodzi na attribution/scale w lewym górnym. Nie rozwiązałem — layout overlay'ów jest w zakresie B4/§12.6. Do decyzji nadzorcy: przesunięcie aside pod skalę albo offset kontrolki.
+- **Pinezka vs celownik z-index**: pinezka to GeoJSON circle na canvasie, celownik to DOM Marker — DOM zawsze wygrywa z canvas, więc przy GPS≈pinezka celownik rysuje się PONAD pinezką (mimo wymogu „najlepiej odwrotnie"). Opłata za zalecany „DOM Marker najlepszy"; alternatywa = źródło GeoJSON celownika w stylu mapy (mapStyle.ts — zamrożony dla mnie).
+- `mapStyle.ts` **nie ruszony** (minzoom konstanty — faza A'); logika PMTiles / click / snap-drag / pendingDrag w MapView nietknięta.
+- Zero `console.log`, zero TODO w kodzie produkcyjnym.
