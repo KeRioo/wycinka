@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { AnimatePresence, motion, useDragControls, type PanInfo } from 'framer-motion';
 import { LocateFixed, X } from 'lucide-react';
 import ArrowPad from './ArrowPad';
 import GpsIndicator from './GpsIndicator';
 import TreeForm from './TreeForm';
 import { Button } from '@/components/ui/button';
+import { PANEL_MOBILE_HEIGHT_CLASS } from '@/components/layout/AppModalShell';
+import { useMobileViewport } from '@/hooks/useMobileViewport';
 import { useMapStore } from '@/stores/mapStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useTreeStore, draftPosition, type TreeDraft } from '@/stores/treeStore';
 import type { GeolocationPosition } from '@/hooks/useGeolocation';
 
-const MOBILE_MEDIA_QUERY = '(max-width: 639px)';
 const DRAG_CLOSE_OFFSET_Y = 100;
 const DRAG_CLOSE_VELOCITY_Y = 500;
 
@@ -19,27 +20,6 @@ interface AddTreePanelProps {
   gpsLoading: boolean;
   gpsError: string | null;
   onRefreshGps: () => void;
-}
-
-function subscribeToMediaQuery(query: string, onChange: (matches: boolean) => void): () => void {
-  const mediaQueryList = window.matchMedia(query);
-  onChange(mediaQueryList.matches);
-  mediaQueryList.addEventListener('change', (event) => {
-    onChange(event.matches);
-  });
-  return () => {
-    mediaQueryList.removeEventListener('change', (event) => {
-      onChange(event.matches);
-    });
-  };
-}
-
-function useMobileViewport(): boolean {
-  const [isMobile, setIsMobile] = useState<boolean>(
-    () => window.matchMedia(MOBILE_MEDIA_QUERY).matches,
-  );
-  useEffect(() => subscribeToMediaQuery(MOBILE_MEDIA_QUERY, setIsMobile), []);
-  return isMobile;
 }
 
 export default function AddTreePanel({
@@ -135,7 +115,7 @@ export default function AddTreePanel({
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0, bottom: 0.6 }}
         onDragEnd={handleDragEnd}
-        className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 max-h-[85vh] h-[62vh] flex flex-col overflow-hidden rounded-t-2xl border-t border-stone-200 bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100%-1.5rem)] sm:rounded-2xl sm:border"
+        className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 ${PANEL_MOBILE_HEIGHT_CLASS} max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl border-t border-stone-200 bg-white shadow-2xl sm:h-auto sm:min-h-0 sm:max-h-[calc(100%-1.5rem)] sm:rounded-2xl sm:border`}
         data-mobile-sheet={isMobile ? 'true' : 'false'}
         style={
           isMobile
