@@ -1,0 +1,34 @@
+/* Kontrolki mapy (§12.5): większe przyciski zoom/kompas + celownik GPS. */
+
+.maplibregl-ctrl.maplibregl-ctrl-group > button {
+  width: 44px;
+  height: 44px;
+}
+
+.maplibregl-ctrl.maplibregl-ctrl-group > button .maplibregl-ctrl-icon {
+  background-size: contain;
+}
+
+.gps-crosshair {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid #0ea5e9;
+  background: hsl(199 89% 48% / 0.3);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.9),
+    0 1px 3px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+}
+
+.gps-crosshair::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: #0369a1;
+}

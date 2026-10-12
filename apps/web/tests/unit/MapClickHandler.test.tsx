@@ -26,6 +26,7 @@ vi.mock('maplibre-gl', () => {
     default: {
       Map: vi.fn().mockImplementation(() => mapInstance),
       NavigationControl: vi.fn(),
+      AttributionControl: vi.fn(),
       ScaleControl: vi.fn(),
       Marker: vi.fn().mockImplementation(() => ({
         setLngLat: vi.fn().mockReturnThis(),

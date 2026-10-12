@@ -45,6 +45,7 @@ vi.mock('maplibre-gl', () => {
     default: {
       Map: MapMock,
       NavigationControl: vi.fn(),
+      AttributionControl: vi.fn(),
       ScaleControl: vi.fn(),
       Marker: MarkerMock,
       Popup: popupMock,
