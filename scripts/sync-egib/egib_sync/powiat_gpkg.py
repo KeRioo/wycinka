@@ -37,6 +37,7 @@ def entry_finite(value: int | float) -> bool:
     """True when value is a finite number (rejects NaN/inf)."""
     return bool(isfinite(float(value)))
 
+
 POW_VOIVODESHIP_CODES: dict[str, str] = {
     "02": "dolnośląskie",
     "04": "kujawsko-pomorskie",
@@ -116,7 +117,9 @@ def canonicalize_powiat_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
                 "region": region,
                 "region_name": str(getattr(row, "nazwa_obrebu", "") or ""),
                 "area_m2": area_m2,
-                "land_use": "Inne" if not isinstance(land_use, str) or not land_use.strip() else land_use,
+                "land_use": "Inne"
+                if not isinstance(land_use, str) or not land_use.strip()
+                else land_use,
                 "geometry": row.geometry,
             }
         )
@@ -151,7 +154,9 @@ def canonicalize_powiat_gpkg(
     staging = target.with_name(target.stem + ".tmp.gpkg")
     canonical.to_file(str(staging), layer=layer, driver="GPKG")
     staging.replace(target)
-    logger.info("powiat_gpkg_canonicalized", source=str(source), target=str(target), rows=len(canonical))
+    logger.info(
+        "powiat_gpkg_canonicalized", source=str(source), target=str(target), rows=len(canonical)
+    )
     return canonical
 
 

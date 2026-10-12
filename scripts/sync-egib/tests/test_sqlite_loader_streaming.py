@@ -18,7 +18,9 @@ from egib_sync.sqlite_loader import (
 
 
 def _parcel(teryt: str, lng: float, lat: float, **overrides: Any) -> dict[str, Any]:
-    geometry = Polygon([(lng, lat), (lng + 0.002, lat), (lng + 0.002, lat + 0.002), (lng, lat + 0.002), (lng, lat)])
+    geometry = Polygon(
+        [(lng, lat), (lng + 0.002, lat), (lng + 0.002, lat + 0.002), (lng, lat + 0.002), (lng, lat)]
+    )
     record: dict[str, Any] = {
         "id": teryt,
         "teryt": teryt,
@@ -60,7 +62,9 @@ def test_load_parcels_stream_when_multiple_batches_then_transctions_per_batch(tm
     assert inserted == 11
     conn = sqlite3.connect(str(db))
     try:
-        ids = [row[0] for row in conn.execute("SELECT id FROM parcels_rtree ORDER BY id").fetchall()]
+        ids = [
+            row[0] for row in conn.execute("SELECT id FROM parcels_rtree ORDER BY id").fetchall()
+        ]
     finally:
         conn.close()
     assert ids == list(range(1, 12))

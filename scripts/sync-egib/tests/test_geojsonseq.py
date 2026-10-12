@@ -15,7 +15,9 @@ from egib_sync.geojsonseq import GeojsonSeqError, build_feature, write_geojsonse
 def _parcel(index: int = 0) -> dict[str, Any]:
     from shapely.geometry import Polygon
 
-    polygon = Polygon([(21.0 + index, 52.0), (21.1 + index, 52.0), (21.1 + index, 52.1), (21.0 + index, 52.1)])
+    polygon = Polygon(
+        [(21.0 + index, 52.0), (21.1 + index, 52.0), (21.1 + index, 52.1), (21.0 + index, 52.1)]
+    )
     return {
         "id": f"141701_1.0022.{index}",
         "teryt": f"141701_1.0022.{index}",

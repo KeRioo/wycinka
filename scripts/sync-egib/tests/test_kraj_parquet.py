@@ -110,7 +110,9 @@ def test_reproject_to_wgs84_when_none_entries_then_passthrough():
 
 
 def test_canonicalize_table_when_sample_rows_then_stats_count():
-    rows = [make_row(f"1417{v:02d}_2.0001.{i}", easting=524_000.0 + i) for i, v in enumerate(range(5))]
+    rows = [
+        make_row(f"1417{v:02d}_2.0001.{i}", easting=524_000.0 + i) for i, v in enumerate(range(5))
+    ]
 
     records, stats = canonicalize_table(build_table(rows), make_transformer())
 
@@ -271,7 +273,9 @@ def test_download_kraj_parquet_when_resume_then_range_sent_and_appended(tmp_path
 
 
 @respx.mock
-def test_download_kraj_parquet_when_server_returns_200_after_resume_then_rewrites(tmp_path, kraj_url):
+def test_download_kraj_parquet_when_server_returns_200_after_resume_then_rewrites(
+    tmp_path, kraj_url
+):
     from egib_sync.kraj_parquet import download_kraj_parquet
 
     target = tmp_path / "0_dzialki.parquet"

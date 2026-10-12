@@ -15,7 +15,7 @@ from egib_sync.kraj_pipeline import (
     estimate_kraj_disk_bytes,
     run_kraj_pipeline,
 )
-from tests.helpers.kraj_parquet_builder import write_multigroup_parquet, make_row
+from tests.helpers.kraj_parquet_builder import make_row, write_multigroup_parquet
 
 TIPPECANOE_AVAILABLE = shutil.which("tippecanoe") is not None
 
@@ -120,9 +120,7 @@ def test_run_kraj_pipeline_when_tippecanoe_fails_then_sqlite_kept_no_tiles(
 
         raise TippecanoeError(1, "simulated tippecanoe crash", ["tippecanoe"])
 
-    monkeypatch.setattr(
-        "egib_sync.kraj_pipeline.generate_pmtiles_geojsonseq", raise_failure
-    )
+    monkeypatch.setattr("egib_sync.kraj_pipeline.generate_pmtiles_geojsonseq", raise_failure)
 
     result = run_kraj_pipeline(kraj_settings, parquet_path=sample_parquet)
 

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from egib_sync import __main__ as cli_main
-from tests.helpers.kraj_parquet_builder import write_multigroup_parquet, make_row
+from tests.helpers.kraj_parquet_builder import make_row, write_multigroup_parquet
 
 
 def test_cli_kraj_when_dry_run_then_zero_and_no_writes(tmp_path: Path):
