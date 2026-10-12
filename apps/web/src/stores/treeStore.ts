@@ -20,6 +20,52 @@ export const treeDraftSchema = z.object({
 
 export type TreeDraftInput = z.infer<typeof treeDraftSchema>;
 
+export interface LastTreeDefaults {
+  species: string;
+  circumference: number;
+}
+
+const LAST_TREE_KEY_PREFIX = 'wycinka:lastTree:';
+
+const lastTreeDefaultsSchema = z.object({
+  species: z.string().min(1),
+  circumference: z.number().positive().max(1000),
+});
+
+export function lastTreeKey(projectId: string): string {
+  return LAST_TREE_KEY_PREFIX + projectId;
+}
+
+export function readLastTreeDefaults(projectId: string | null): LastTreeDefaults | null {
+  if (projectId === null) {
+    return null;
+  }
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(lastTreeKey(projectId));
+  } catch {
+    return null;
+  }
+  if (raw === null) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const result = lastTreeDefaultsSchema.safeParse(parsed);
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastTreeDefaults(projectId: string, defaults: LastTreeDefaults): void {
+  try {
+    window.localStorage.setItem(lastTreeKey(projectId), JSON.stringify(defaults));
+  } catch {
+    // brak pamięci lokalnej (np. quota / brak dostępu) nie może blokować zapisu drzewa
+  }
+}
+
 export interface TreeDraft {
   lat: number;
   lng: number;
@@ -32,7 +78,7 @@ export interface TreeDraft {
 
 export type TreeMode = 'idle' | 'placing' | 'editing';
 
-interface StartPlacingArgs {
+export interface StartPlacingArgs {
   gpsPosition?: { lat: number; lng: number; accuracy?: number } | null;
   centroid?: { lat: number; lng: number } | null;
   species?: string;
@@ -120,8 +166,14 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       draft.lat = centroid.lat;
       draft.lng = centroid.lng;
     }
+    const remembered = readLastTreeDefaults(get().activeProjectId);
     if (args?.species !== undefined) {
       draft.species = args.species;
+    } else if (remembered !== null) {
+      draft.species = remembered.species;
+    }
+    if (remembered !== null) {
+      draft.circumference = remembered.circumference;
     }
     set({ mode: 'placing', pending: draft, editingTreeId: null });
   },
@@ -213,6 +265,10 @@ export const useTreeStore = create<TreeState>((set, get) => ({
       throw new Error(parsed.error.issues[0]?.message ?? 'Niepoprawne dane drzewa');
     }
     const pos = computeDraftPosition(pending);
+    const rememberedDefaults: LastTreeDefaults = {
+      species: parsed.data.species,
+      circumference: parsed.data.circumference,
+    };
     if (mode === 'editing' && editingTreeId !== null) {
       const updated = await updateTreeInDb(editingTreeId, {
         lat: pos.lat,
@@ -223,6 +279,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
         notes: parsed.data.notes ?? undefined,
         manualOffset: pending.manualOffset,
       });
+      saveLastTreeDefaults(projectId, rememberedDefaults);
       set((state) => ({
         trees: state.trees.map((t) => (t.id === updated.id ? updated : t)),
         mode: 'idle',
@@ -243,6 +300,7 @@ export const useTreeStore = create<TreeState>((set, get) => ({
         : {}),
       manualOffset: pending.manualOffset,
     });
+    saveLastTreeDefaults(projectId, rememberedDefaults);
     set((state) => ({
       trees: [...state.trees, tree],
       activeProjectId: projectId,
