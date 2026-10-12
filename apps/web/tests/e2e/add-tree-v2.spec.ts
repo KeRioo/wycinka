@@ -132,17 +132,24 @@ test.describe('AddTreePanel v2 — kompresja §12.4 (desktop)', () => {
 test.describe('AddTreePanel v2 — GPS odmówiony (desktop)', () => {
   test.beforeEach(async ({ context }) => {
     await context.addInitScript(() => {
+      const deniedError = {
+        code: 1,
+        message: 'User denied Geolocation',
+        PERMISSION_DENIED: 1,
+        POSITION_UNAVAILABLE: 2,
+        TIMEOUT: 3,
+      } as unknown as GeolocationPositionError;
       navigator.geolocation.getCurrentPosition = (
         _success: PositionCallback,
         error: PositionErrorCallback,
       ) => {
-        setTimeout(() => error(new GeolocationPositionError()), 50);
+        setTimeout(() => error(deniedError), 50);
       };
       navigator.geolocation.watchPosition = (
         _success: PositionCallback,
         error: PositionErrorCallback,
       ) => {
-        setTimeout(() => error(new GeolocationPositionError()), 50);
+        setTimeout(() => error(deniedError), 50);
         return 1;
       };
       navigator.geolocation.clearWatch = () => undefined;
