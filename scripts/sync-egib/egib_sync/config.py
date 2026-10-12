@@ -60,6 +60,27 @@ class RetentionSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EGIB_RETENTION__")
 
 
+class KrajSettings(BaseSettings):
+    """National (kraj) GeoParquet export — eziudp_wfs/PARQUET."""
+
+    parquet_url: str = "https://opendata.geoportal.gov.pl/InneDane/latest_exports/eziudp_wfs/PARQUET/0_dzialki.parquet"
+    parquet_voiv_template: str = "https://opendata.geoportal.gov.pl/InneDane/latest_exports/eziudp_wfs/PARQUET/{voiv}_dzialki.parquet"
+    parquet_filename: str = "0_dzialki.parquet"
+    read_batch_rows: int = 50_000
+    sqlite_batch_rows: int = 50_000
+    min_zoom: int = 12
+    max_zoom: int = 16
+    base_zoom: int = 15
+    drop_densest: bool = True
+    extend_zooms: bool = False
+    layer_name: str = "dzialki"
+    tippecanoe_path: str = "tippecanoe"
+    pmtiles_convert_path: str = "pmtiles"
+    download_chunk_size: int = 8_388_608
+
+    model_config = SettingsConfigDict(env_prefix="EGIB_KRAJ__")
+
+
 class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -70,6 +91,7 @@ class Settings(BaseSettings):
     sqlite: SqliteSettings = Field(default_factory=SqliteSettings)
     sources: SourcesSettings = Field(default_factory=SourcesSettings)
     retention: RetentionSettings = Field(default_factory=RetentionSettings)
+    kraj: KrajSettings = Field(default_factory=KrajSettings)
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -103,6 +125,14 @@ class Settings(BaseSettings):
     def merged_path(self) -> Path:
         return self.work_dir / "merged.gpkg"
 
+    @property
+    def staging_dir(self) -> Path:
+        return self.data_dir / "staging"
+
+    @property
+    def kraj_parquet_default_path(self) -> Path:
+        return self.raw_dir / self.kraj.parquet_filename
+
     def ensure_dirs(self) -> None:
         for directory in (
             self.data_dir,
@@ -111,6 +141,7 @@ class Settings(BaseSettings):
             self.backups_dir,
             self.data_dir / "pmtiles",
             self.data_dir / "sqlite",
+            self.staging_dir,
         ):
             directory.mkdir(parents=True, exist_ok=True)
 

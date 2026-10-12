@@ -16,7 +16,7 @@ auto-incrementing rowid of the R-tree.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from math import isfinite
 from pathlib import Path
@@ -330,6 +330,154 @@ def _flush(conn: sqlite3.Connection, buffer: list[tuple[Any, ...]]) -> int:
     return inserted
 
 
+_RTREE_COLUMNS: Final[tuple[str, ...]] = (
+    "id",
+    "min_lng",
+    "max_lng",
+    "min_lat",
+    "max_lat",
+)
+
+
+def _parcel_tuple_from_record(
+    parcel: Mapping[str, Any],
+    *,
+    fetched_at: str,
+    datasource: str,
+) -> tuple[Any, ...] | None:
+    """Build an INSERT tuple from a canonical parcel record (WGS84 geometry)."""
+    geom = parcel.get("geometry")
+    if geom is None or geom.is_empty:
+        return None
+    minx, miny, maxx, maxy = geom.bounds
+    centroid = geom.centroid
+    payload = dict(parcel)
+    payload.pop("geometry", None)
+    feature_id = str(parcel.get("id", ""))
+    return (
+        feature_id,
+        str(payload.get("teryt") or feature_id),
+        str(payload.get("number", "")),
+        str(payload.get("voivodeship", "")),
+        str(payload.get("voivodeship_code", "")),
+        str(payload.get("county", "")),
+        str(payload.get("county_code", "")),
+        str(payload.get("commune", "")),
+        str(payload.get("commune_code", "")),
+        str(payload.get("region", "")),
+        payload.get("region_name"),
+        _finite_or_zero(payload.get("area_m2", 0.0)),
+        payload.get("land_use"),
+        geom.wkt,
+        float(centroid.x),
+        float(centroid.y),
+        float(minx),
+        float(miny),
+        float(maxx),
+        float(maxy),
+        fetched_at,
+        datasource,
+    )
+
+
+def _flush_streaming(
+    conn: sqlite3.Connection,
+    buffer: list[tuple[Any, ...]],
+    *,
+    next_rtree_id: int,
+) -> tuple[int, int]:
+    """Insert a batch with explicit R-tree ids; returns (rows, next_id)."""
+    if not buffer:
+        return 0, next_rtree_id
+    placeholders = ",".join("?" * len(_COLUMNS))
+    conn.executemany(
+        f"INSERT OR REPLACE INTO parcels ({','.join(_COLUMNS)}) VALUES ({placeholders})",
+        buffer,
+    )
+    rtree_rows: list[tuple[int, float, float, float, float]] = []
+    map_rows: list[tuple[str, int]] = []
+    for offset, row in enumerate(buffer):
+        rtree_id = next_rtree_id + offset
+        rtree_rows.append((rtree_id, row[16], row[18], row[17], row[19]))
+        map_rows.append((row[0], rtree_id))
+    conn.executemany(
+        "INSERT INTO parcels_rtree(id, min_lng, max_lng, min_lat, max_lat) VALUES (?, ?, ?, ?, ?)",
+        rtree_rows,
+    )
+    conn.executemany(
+        "INSERT OR REPLACE INTO parcels_rtree_map(parcel_id, rtree_id) VALUES (?, ?)", map_rows
+    )
+    return len(buffer), next_rtree_id + len(buffer)
+
+
+def load_parcels_stream(
+    parcels: Iterable[Mapping[str, Any]],
+    db_path: Path,
+    *,
+    batch_size: int = 50_000,
+    datasource: str = "geoportal-parquet-kraj",
+    fetched_at: str | None = None,
+) -> int:
+    """Stream canonical parcels (WGS84) into a fresh SQLite database.
+
+    One transaction per batch of ``batch_size`` rows — keeps the WAL bounded
+    for country-scale loads (tens of millions of rows). The database must be
+    a fresh staging file (created by ``init_db``); callers atomically rename
+    it into place on success.
+    """
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive, got {batch_size}")
+    init_db(db_path)
+    fetched = fetched_at or _now_iso()
+    _ensure_parent(db_path)
+    conn = _connect(db_path)
+    inserted = 0
+    next_rtree_id = 1
+    try:
+        buffer: list[tuple[Any, ...]] = []
+        for parcel in parcels:
+            row = _parcel_tuple_from_record(
+                parcel,
+                fetched_at=fetched,
+                datasource=datasource,
+            )
+            if row is None:
+                continue
+            buffer.append(row)
+            if len(buffer) >= batch_size:
+                next_rtree_id += _flush_transaction(conn, buffer, next_rtree_id)
+                inserted += len(buffer)
+                buffer.clear()
+        if buffer:
+            next_rtree_id += _flush_transaction(conn, buffer, next_rtree_id)
+            inserted += len(buffer)
+    except BaseException:
+        conn.close()
+        for suffix in ("", "-wal", "-shm"):
+            Path(str(db_path) + suffix).unlink(missing_ok=True)
+        raise
+    finally:
+        conn.close()
+    logger.info("sqlite_load_stream_done", db=str(db_path), rows=inserted, batch_size=batch_size)
+    return inserted
+
+
+def _flush_transaction(
+    conn: sqlite3.Connection,
+    buffer: list[tuple[Any, ...]],
+    next_rtree_id: int,
+) -> int:
+    """Run one batch insert inside its own transaction; returns row count."""
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        rows, _ = _flush_streaming(conn, buffer, next_rtree_id=next_rtree_id)
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    return rows
+
+
 def update_sync_meta(
     db_path: Path,
     *,
@@ -552,6 +700,7 @@ __all__ = [
     "init_db",
     "iter_parcels_as_geojson",
     "load_parcels_from_gpkg",
+    "load_parcels_stream",
     "parcels_count",
     "point_query",
     "read_sync_meta",

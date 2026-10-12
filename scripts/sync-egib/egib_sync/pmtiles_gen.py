@@ -115,6 +115,89 @@ def _build_command(
     return cmd
 
 
+def _build_stream_command(
+    *,
+    output_pmtiles: Path,
+    tippecanoe: str,
+    min_zoom: int,
+    max_zoom: int,
+    base_zoom: int | None,
+    layer_name: str,
+    drop_densest: bool,
+    extend_zooms: bool,
+    no_tile_size_limit: bool,
+    temporary_directory: Path | None,
+) -> list[str]:
+    """Build the tippecanoe CLI args for a stdin ("-") streaming run."""
+    if not (0 <= min_zoom <= max_zoom <= 22):
+        raise ValueError(f"invalid zoom range: min_zoom={min_zoom}, max_zoom={max_zoom}")
+    if base_zoom is not None and not (min_zoom <= base_zoom <= max_zoom):
+        raise ValueError(f"base_zoom ({base_zoom}) must be within [{min_zoom}, {max_zoom}]")
+    if not layer_name or not layer_name.strip():
+        raise ValueError("layer_name must be a non-empty string")
+
+    cmd: list[str] = [
+        tippecanoe,
+        f"--output={output_pmtiles}",
+        f"--minimum-zoom={min_zoom}",
+        f"--maximum-zoom={max_zoom}",
+        f"{_LAYER_FLAG_PREFIX}{layer_name}",
+        _FORCE_FLAG,
+    ]
+    if base_zoom is not None:
+        cmd.insert(3, f"--base-zoom={base_zoom}")
+    if drop_densest:
+        cmd.append("--drop-densest-as-needed")
+    if extend_zooms:
+        cmd.append("--extend-zooms-if-still-dropping")
+    if no_tile_size_limit:
+        cmd.append("--no-tile-size-limit")
+    if temporary_directory is not None:
+        cmd.append(f"--temporary-directory={temporary_directory}")
+    cmd.append("-")
+    return cmd
+
+
+def _run_tippecanoe_from_gzip(
+    command: list[str],
+    input_geojsonseq: Path,
+    *,
+    timeout_seconds: int | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Pipe ``gzip -dc <file>`` into tippecanoe's stdin and wait.
+
+    Both process return codes are checked: a silently-failed decompressor
+    must not look like a successful tippecanoe run.
+    """
+    gunzip = subprocess.Popen(  # noqa: S603
+        ["gzip", "-dc", str(input_geojsonseq)],  # noqa: S607
+        stdout=subprocess.PIPE,
+    )
+    gunzip_code = 0
+    try:
+        result = subprocess.run(  # noqa: S603
+            command,
+            stdin=gunzip.stdout,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_seconds,
+        )
+    finally:
+        if gunzip.stdout is not None:
+            gunzip.stdout.close()
+        gunzip_code = gunzip.wait()
+    if result.returncode == 0 and gunzip_code != 0:
+        raise TippecanoeError(
+            gunzip_code,
+            f"gzip -dc {input_geojsonseq} failed with exit {gunzip_code}",
+            command,
+        )
+    return result
+
+
 def _atomic_replace(tmp: Path, final: Path) -> None:
     """Atomically replace ``final`` with ``tmp``.
 
@@ -129,7 +212,7 @@ PMTILES_MAGIC: Final[bytes] = b"PMTiles"
 PMTILES_CONVERT_TIMEOUT_SECONDS: Final[int] = 900
 
 
-def _ensure_pmtiles_format(staging: Path) -> Path:
+def _ensure_pmtiles_format(staging: Path, *, convert_path: str = "pmtiles") -> Path:
     """Return a true PMTiles v3 file, converting from MBTiles when required.
 
     tippecanoe (< 3.x) emits an MBTiles (SQLite) container even when the
@@ -142,7 +225,9 @@ def _ensure_pmtiles_format(staging: Path) -> Path:
     if magic == PMTILES_MAGIC:
         return staging
 
-    convert = shutil.which("pmtiles")
+    convert = shutil.which(convert_path) or (
+        convert_path if "/" in convert_path and Path(convert_path).is_file() else None
+    )
     if convert is None:
         logger.warning(
             "pmtiles_convert_skipped",
@@ -301,8 +386,111 @@ def generate_pmtiles(
     return output_pmtiles
 
 
+def generate_pmtiles_geojsonseq(
+    input_geojsonseq: Path,
+    output_pmtiles: Path,
+    *,
+    min_zoom: int = 12,
+    max_zoom: int = 16,
+    base_zoom: int | None = None,
+    layer_name: str = "dzialki",
+    tippecanoe_path: str = "tippecanoe",
+    drop_densest: bool = True,
+    extend_zooms: bool = False,
+    no_tile_size_limit: bool = True,
+    temporary_directory: Path | None = None,
+    pmtiles_convert_path: str = "pmtiles",
+    timeout_seconds: int | None = None,
+) -> Path:
+    """Generate a PMTiles archive from a (gzipped) GeoJSONSeq streaming input.
+
+    Unlike :func:`generate_pmtiles` this never materializes the input as a
+    plain file on disk: the gzipped GeoJSONSeq is decompressed on the fly
+    (``gzip -dc``) and piped into tippecanoe's stdin. Memory usage stays
+    bounded by tippecanoe's own tile buffering (disk-backed via
+    ``--temporary-directory``).
+
+    The output is written atomically: tippecanoe runs with a ``.tmp``
+    filename and the file is renamed on success. tippecanoe < 3.x emits
+    MBTiles, so the staging file is converted to PMTiles v3 via go-pmtiles
+    when needed (``pmtiles_convert_path``).
+    """
+    if not input_geojsonseq.exists():
+        raise FileNotFoundError(f"GeoJSONSeq input not found: {input_geojsonseq}")
+
+    tippecanoe = _resolve_tippecanoe(tippecanoe_path)
+
+    output_pmtiles = output_pmtiles.expanduser().resolve()
+    output_pmtiles.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_pmtiles.with_name(f".{output_pmtiles.name}.tmp")
+
+    cmd = _build_stream_command(
+        output_pmtiles=tmp_path,
+        tippecanoe=tippecanoe,
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        base_zoom=base_zoom,
+        layer_name=layer_name,
+        drop_densest=drop_densest,
+        extend_zooms=extend_zooms,
+        no_tile_size_limit=no_tile_size_limit,
+        temporary_directory=temporary_directory,
+    )
+
+    logger.info(
+        "pmtiles_generating_stream",
+        input=str(input_geojsonseq),
+        output=str(output_pmtiles),
+        min_zoom=min_zoom,
+        max_zoom=max_zoom,
+        base_zoom=base_zoom,
+        layer=layer_name,
+    )
+
+    if tmp_path.exists():
+        tmp_path.unlink()
+    try:
+        result = _run_tippecanoe_from_gzip(cmd, input_geojsonseq, timeout_seconds=timeout_seconds)
+    except OSError as exc:
+        raise TippecanoeNotFoundError(
+            f"failed to execute tippecanoe at {tippecanoe}: {exc}"
+        ) from exc
+    except BaseException:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+        raise
+
+    if result.returncode != 0:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise TippecanoeError(result.returncode, result.stderr, cmd)
+
+    if not tmp_path.exists() or tmp_path.stat().st_size == 0:
+        raise TippecanoeError(
+            result.returncode,
+            "tippecanoe exited 0 but produced no output",
+            cmd,
+        )
+
+    staging = _ensure_pmtiles_format(tmp_path, convert_path=pmtiles_convert_path)
+    _atomic_replace(staging, output_pmtiles)
+
+    size = output_pmtiles.stat().st_size
+    logger.info(
+        "pmtiles_generated_stream",
+        input=str(input_geojsonseq),
+        output=str(output_pmtiles),
+        size_bytes=size,
+    )
+    return output_pmtiles
+
+
 __all__ = [
     "TippecanoeError",
     "TippecanoeNotFoundError",
     "generate_pmtiles",
+    "generate_pmtiles_geojsonseq",
 ]

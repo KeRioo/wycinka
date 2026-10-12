@@ -53,9 +53,22 @@ def test_parse_teryt_units_when_invalid_then_empty_strings():
 
 def test_canonicalize_when_valid_then_canonical_columns(sample_gdf):
     out = canonicalize_powiat_gdf(sample_gdf)
-    for column in ("id", "teryt", "number", "voivodeship", "voivodeship_code",
-                   "county", "county_code", "commune", "commune_code",
-                   "region", "region_name", "area_m2", "land_use", "geometry"):
+    for column in (
+        "id",
+        "teryt",
+        "number",
+        "voivodeship",
+        "voivodeship_code",
+        "county",
+        "county_code",
+        "commune",
+        "commune_code",
+        "region",
+        "region_name",
+        "area_m2",
+        "land_use",
+        "geometry",
+    ):
         assert column in out.columns, column
     first = out.iloc[0]
     assert first["teryt"] == "141701_1.0022.2/2"
