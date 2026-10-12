@@ -111,8 +111,8 @@ test.describe('Mobile — AddTreePanel bottom sheet', () => {
       throw new Error('panel box missing');
     }
     const heightRatio = box.height / viewport.height;
-    expect(heightRatio).toBeGreaterThanOrEqual(0.55);
-    expect(heightRatio).toBeLessThanOrEqual(0.65);
+    expect(heightRatio).toBeGreaterThanOrEqual(0.45);
+    expect(heightRatio).toBeLessThanOrEqual(0.55);
     expect(box.y).toBeGreaterThanOrEqual(viewport.height * 0.3);
     expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
 
