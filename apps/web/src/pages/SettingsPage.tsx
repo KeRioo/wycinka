@@ -81,8 +81,8 @@ export default function SettingsPage(): JSX.Element {
         <BackupPanel />
 
         <p className="pt-2 text-sm text-stone-500">
-          <Link to="/map" className="text-forest-700 underline hover:text-forest-900">
-            Wróć do mapy
+          <Link to="/" className="text-forest-700 underline hover:text-forest-900">
+            Wróć do strony startowej
           </Link>
         </p>
       </div>

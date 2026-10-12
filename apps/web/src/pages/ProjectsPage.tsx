@@ -103,7 +103,7 @@ export default function ProjectsPage(): JSX.Element {
     setCreating(true);
     try {
       await createAndActivate(name);
-      navigate('/map');
+      navigate('/app');
     } finally {
       setCreating(false);
     }
@@ -131,7 +131,7 @@ export default function ProjectsPage(): JSX.Element {
 
   const handleSelect = (id: string): void => {
     setActive(id);
-    navigate('/map');
+    navigate('/app');
   };
 
   const handleConfirmDelete = async (): Promise<void> => {
@@ -240,8 +240,8 @@ export default function ProjectsPage(): JSX.Element {
         </div>
 
         <p className="pt-2 text-sm text-stone-500">
-          <Link to="/map" className="text-forest-700 underline hover:text-forest-900">
-            Wróć do mapy
+          <Link to="/" className="text-forest-700 underline hover:text-forest-900">
+            Wróć do strony startowej
           </Link>
         </p>
       </div>
