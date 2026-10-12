@@ -242,7 +242,8 @@ describe('AddTreePanel — mobile bottom sheet', () => {
     );
     const panel = screen.getByTestId('add-tree-panel');
     expect(panel).toHaveAttribute('data-mobile-sheet', 'true');
-    expect(panel.className).toContain('h-[62vh]');
+    expect(panel.className).toContain('h-[50dvh]');
+    expect(panel.className).toContain('min-h-[300px]');
     expect(panel.className).toContain('rounded-t-2xl');
     expect(panel.className).toContain('sm:h-auto');
     expect(screen.getByTestId('add-tree-drag-handle')).toBeInTheDocument();
