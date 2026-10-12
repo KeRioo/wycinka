@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useDragControls, type PanInfo } from 'framer-motion';
-import { LocateFixed, X } from 'lucide-react';
+import { LocateFixed } from 'lucide-react';
 import ArrowPad from './ArrowPad';
 import GpsIndicator from './GpsIndicator';
 import TreeForm from './TreeForm';
@@ -92,6 +92,7 @@ export default function AddTreePanel({
       lng: gpsPosition.lng,
       accuracy: gpsPosition.accuracy,
     });
+    useProjectStore.getState().setToast('Pozycja odświeżona z GPS');
   };
 
   const handleNudge = (dx: number, dy: number): void => {
@@ -135,7 +136,7 @@ export default function AddTreePanel({
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0, bottom: 0.6 }}
         onDragEnd={handleDragEnd}
-        className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 max-h-[85vh] h-[62vh] flex flex-col overflow-hidden rounded-t-2xl border-t border-stone-200 bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100%-1.5rem)] sm:rounded-2xl sm:border"
+        className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 max-h-[85vh] h-[50vh] flex flex-col overflow-hidden rounded-t-2xl border-t border-stone-200 bg-white shadow-2xl sm:h-auto sm:max-h-[calc(100%-1.5rem)] sm:rounded-2xl sm:border"
         data-mobile-sheet={isMobile ? 'true' : 'false'}
         style={
           isMobile
@@ -160,66 +161,25 @@ export default function AddTreePanel({
             }
             handleCancel();
           }}
-          className="flex h-10 w-full shrink-0 items-center justify-center sm:hidden"
+          className="flex h-8 w-full shrink-0 items-center justify-center sm:hidden"
         >
           <span aria-hidden="true" className="h-1.5 w-12 rounded-full bg-stone-300" />
         </button>
 
-        <div className="flex shrink-0 items-center justify-between border-b border-stone-200 px-4 py-3 sm:py-3">
-          <h2 className="text-lg font-semibold text-forest-900">
+        <div
+          data-testid="add-tree-header"
+          className="flex shrink-0 items-center justify-between gap-2 border-b border-stone-200 px-3 py-2"
+        >
+          <h2 className="min-w-0 truncate text-base font-semibold text-forest-900">
             {mode === 'editing' ? 'Edytuj drzewo' : 'Dodaj drzewo'}
           </h2>
-          <button
-            type="button"
-            aria-label="Anuluj dodawanie drzewa"
-            data-testid="panel-close"
-            onClick={handleCancel}
-            className="flex h-11 w-11 items-center justify-center rounded text-stone-500 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500"
-          >
-            <X aria-hidden="true" className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:flex-none sm:overflow-visible">
-          <GpsIndicator
-            position={gpsPosition}
-            loading={gpsLoading}
-            error={gpsError}
-            onRefresh={onRefreshGps}
-          />
-
-          <button
-            type="button"
-            data-testid="focus-pending"
-            onClick={handleFocusPending}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-forest-300 bg-forest-50 text-sm font-medium text-forest-800 hover:bg-forest-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500"
-          >
-            <LocateFixed aria-hidden="true" className="h-5 w-5" />
-            Przesuń mapę do pinezki
-          </button>
-
-          <div className="text-xs text-stone-500">
-            <span>Pozycja: </span>
-            <span data-testid="pending-position" className="font-mono">
-              {pos.lat.toFixed(5)}, {pos.lng.toFixed(5)}
-            </span>
-          </div>
-
-          <ArrowPad
-            onNudge={handleNudge}
-            {...(gpsPosition !== null ? { onUseGps: handleUseGps } : {})}
-            dx={pending.manualOffset.dx}
-            dy={pending.manualOffset.dy}
-          />
-
-          <TreeForm />
-
-          <div className="flex items-center justify-end gap-2 border-t border-stone-200 pt-3">
+          <div className="flex shrink-0 items-center gap-1.5">
             <Button
               type="button"
               variant="secondary"
               data-testid="panel-cancel"
               onClick={handleCancel}
+              className="h-11 px-3 text-sm"
             >
               Anuluj
             </Button>
@@ -229,10 +189,47 @@ export default function AddTreePanel({
               data-testid="panel-save"
               onClick={handleSave}
               disabled={!formValid}
+              className="h-11 px-3 text-sm"
             >
               {mode === 'editing' ? 'Zapisz zmiany' : 'Zapisz'}
             </Button>
           </div>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3" data-testid="add-tree-body">
+          <GpsIndicator
+            position={gpsPosition}
+            loading={gpsLoading}
+            error={gpsError}
+            onRefresh={onRefreshGps}
+          />
+
+          <div className="flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate text-xs text-stone-500">
+              Pozycja:{' '}
+              <span data-testid="pending-position" className="font-mono">
+                {pos.lat.toFixed(5)}, {pos.lng.toFixed(5)}
+              </span>
+            </p>
+            <button
+              type="button"
+              data-testid="focus-pending"
+              aria-label="Przesuń mapę do pinezki"
+              onClick={handleFocusPending}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-forest-300 bg-forest-50 text-forest-800 hover:bg-forest-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500"
+            >
+              <LocateFixed aria-hidden="true" className="h-5 w-5" />
+            </button>
+          </div>
+
+          <ArrowPad
+            onNudge={handleNudge}
+            {...(gpsPosition === null ? {} : { onUseGps: handleUseGps })}
+            dx={pending.manualOffset.dx}
+            dy={pending.manualOffset.dy}
+          />
+
+          <TreeForm />
         </div>
       </motion.div>
     </AnimatePresence>

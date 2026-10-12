@@ -149,7 +149,7 @@ describe('AddTreePanel', () => {
         onRefreshGps={vi.fn()}
       />,
     );
-    await user.click(screen.getByTestId('panel-close'));
+    await user.click(screen.getByTestId('panel-cancel'));
     expect(useTreeStore.getState().mode).toBe('idle');
   });
 
@@ -242,7 +242,7 @@ describe('AddTreePanel — mobile bottom sheet', () => {
     );
     const panel = screen.getByTestId('add-tree-panel');
     expect(panel).toHaveAttribute('data-mobile-sheet', 'true');
-    expect(panel.className).toContain('h-[62vh]');
+    expect(panel.className).toContain('h-[50vh]');
     expect(panel.className).toContain('rounded-t-2xl');
     expect(panel.className).toContain('sm:h-auto');
     expect(screen.getByTestId('add-tree-drag-handle')).toBeInTheDocument();
@@ -300,5 +300,82 @@ describe('AddTreePanel — focus pending pin', () => {
     );
     await user.click(screen.getByTestId('focus-pending'));
     expect(useMapStore.getState().focusTarget).toEqual({ lat: 52, lng: 21 });
+  });
+});
+
+describe('AddTreePanel — kompresja (§12.4)', () => {
+  beforeEach(async () => {
+    mediaQueryState.matches = false;
+    mediaQueryState.listeners = [];
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: mediaQueryState.matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn((_type: string, listener: MediaListener) => {
+        mediaQueryState.listeners.push(listener);
+      }),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: () => false,
+    }));
+    useMapStore.getState().reset();
+    useTreeStore.getState().clear();
+    await useProjectStore.getState().clear();
+    window.localStorage.clear();
+    useProjectStore.getState().setToast(null);
+  });
+
+  function placingPanel(gps: { lat: number; lng: number; accuracy: number; timestamp: number } | null): JSX.Element {
+    useTreeStore.getState().startPlacing({ gpsPosition: { lat: 52, lng: 21 } });
+    return (
+      <AddTreePanel
+        gpsPosition={gps}
+        gpsLoading={false}
+        gpsError={null}
+        onRefreshGps={vi.fn()}
+      />
+    );
+  }
+
+  it('should keep Zapisz and Anuluj actions in the header above the form', () => {
+    render(placingPanel({ lat: 52, lng: 21, accuracy: 8, timestamp: 0 }));
+    const header = screen.getByTestId('add-tree-header');
+    expect(header).toContainElement(screen.getByTestId('panel-save'));
+    expect(header).toContainElement(screen.getByTestId('panel-cancel'));
+    const form = screen.getByTestId('tree-form');
+    const save = screen.getByTestId('panel-save');
+    expect(save.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('should disable GPS refresh when GPS position is unavailable', () => {
+    render(placingPanel(null));
+    expect(screen.getByTestId('panel-gps-refresh')).toBeDisabled();
+  });
+
+  it('should refresh pending position to current GPS and reset offset on click', async () => {
+    const user = userEvent.setup();
+    useTreeStore.getState().startPlacing({ gpsPosition: { lat: 52, lng: 21 } });
+    useTreeStore.getState().nudge(1.5, 0);
+    render(
+      <AddTreePanel
+        gpsPosition={{ lat: 52.5, lng: 20.5, accuracy: 6, timestamp: 0 }}
+        gpsLoading={false}
+        gpsError={null}
+        onRefreshGps={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByTestId('panel-gps-refresh'));
+    const pending = useTreeStore.getState().pending;
+    expect(pending?.lat).toBe(52.5);
+    expect(pending?.lng).toBe(20.5);
+    expect(pending?.manualOffset).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it('should show a toast feedback after GPS refresh', async () => {
+    const user = userEvent.setup();
+    render(placingPanel({ lat: 52.5, lng: 20.5, accuracy: 6, timestamp: 0 }));
+    await user.click(screen.getByTestId('panel-gps-refresh'));
+    expect(useProjectStore.getState().toast).toBe('Pozycja odświeżona z GPS');
   });
 });

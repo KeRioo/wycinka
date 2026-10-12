@@ -19,14 +19,23 @@ describe('ArrowPad', () => {
     expect(screen.getByTestId('nudge-right')).toBeInTheDocument();
   });
 
-  it('should render use-gps button when onUseGps provided', () => {
-    render(<ArrowPad onNudge={vi.fn()} onUseGps={vi.fn()} />);
-    expect(screen.getByTestId('use-gps')).toBeInTheDocument();
+  it('should render GPS refresh button in the pad center', () => {
+    render(<ArrowPad onNudge={vi.fn()} />);
+    expect(screen.getByTestId('panel-gps-refresh')).toBeInTheDocument();
   });
 
-  it('should not render use-gps button when onUseGps missing', () => {
+  it('should disable GPS refresh when onUseGps missing (GPS nieaktywny)', () => {
     render(<ArrowPad onNudge={vi.fn()} />);
-    expect(screen.queryByTestId('use-gps')).not.toBeInTheDocument();
+    expect(screen.getByTestId('panel-gps-refresh')).toBeDisabled();
+  });
+
+  it('should enable GPS refresh when onUseGps provided and call it on click', () => {
+    const onUseGps = vi.fn();
+    render(<ArrowPad onNudge={vi.fn()} onUseGps={onUseGps} />);
+    const button = screen.getByTestId('panel-gps-refresh');
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(onUseGps).toHaveBeenCalledTimes(1);
   });
 
   it('should call onNudge with step when arrow pressed', () => {
@@ -75,10 +84,10 @@ describe('ArrowPad', () => {
     fireEvent.pointerUp(screen.getByTestId('nudge-right'));
   });
 
-  it('should call onUseGps when center button clicked', () => {
+  it('should call onUseGps when GPS refresh clicked', () => {
     const onUseGps = vi.fn();
     render(<ArrowPad onNudge={vi.fn()} onUseGps={onUseGps} />);
-    fireEvent.click(screen.getByTestId('use-gps'));
+    fireEvent.click(screen.getByTestId('panel-gps-refresh'));
     expect(onUseGps).toHaveBeenCalledTimes(1);
   });
 
