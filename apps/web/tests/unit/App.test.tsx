@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -8,10 +8,12 @@ vi.mock('maplibre-gl', () => ({
     NavigationControl: vi.fn(),
     ScaleControl: vi.fn(),
     Popup: vi.fn(),
+    Marker: vi.fn(),
     addProtocol: vi.fn(),
     removeProtocol: vi.fn(),
   },
   Map: vi.fn(),
+  Popup: vi.fn(),
 }));
 
 vi.mock('pmtiles', () => ({
@@ -19,17 +21,40 @@ vi.mock('pmtiles', () => ({
 }));
 
 describe('App routing', () => {
-  it('should render HomePage for / route', async () => {
+  it('should render the launcher start page for /', async () => {
     const { default: App } = await import('@/App');
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Wycinka Drzew/i);
+    expect(screen.getByRole('heading', { level: 1, name: /Wycinka Drzew/i })).toBeInTheDocument();
+    expect(screen.getByTestId('start-new-project')).toBeInTheDocument();
   });
 
-  it('should render NotFound for unknown route', async () => {
+  it('should redirect /app to start when no project was chosen yet', async () => {
+    const { default: App } = await import('@/App');
+    render(
+      <MemoryRouter initialEntries={['/app']}>
+        <App />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('start-new-project')).toBeInTheDocument();
+    });
+  });
+
+  it('should show the projects page for /projects', async () => {
+    const { default: App } = await import('@/App');
+    render(
+      <MemoryRouter initialEntries={['/projects']}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: /Projekty/i })).toBeInTheDocument();
+  });
+
+  it('should show NotFound for unknown routes', async () => {
     const { default: App } = await import('@/App');
     render(
       <MemoryRouter initialEntries={['/unknown-route']}>
