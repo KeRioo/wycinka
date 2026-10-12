@@ -91,7 +91,7 @@ def _split_by_voivodeship(
             raise RuntimeError(f"bucket finalize failed: {errors}")
     for code, count in counts.items():
         logger.info("parallel_tiles_bucket_done", voiv=code, features=count)
-    return [(code, outputs[code]) for code in _POOLS if counts[code] > 0]
+    return [(code, outputs[code]) for code in _WOIV_CODES if counts[code] > 0]
 
 
 def _run_tippecanoe_region(
@@ -101,10 +101,16 @@ def _run_tippecanoe_region(
     *,
     min_zoom: int,
     max_zoom: int,
-    base_zoom: int,
+    base_zoom: int | None,
     layer_name: str,
     tippecanoe_path: str,
 ) -> tuple[str, Path]:
+    if not (0 <= min_zoom <= max_zoom <= 22):
+        raise ValueError(f"invalid zoom range: min_zoom={min_zoom}, max_zoom={max_zoom}")
+    if base_zoom is not None and not (min_zoom <= base_zoom <= max_zoom):
+        raise ValueError(f"base_zoom ({base_zoom}) must be within [{min_zoom}, {max_zoom}]")
+    if not layer_name or not layer_name.strip():
+        raise ValueError("layer_name must be a non-empty string")
     tmp_dir = staging_dir / f"tippecanoe-voiv{code}-tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     result: Path = staging_dir / f"kraj-voiv{code}.mbtiles"
@@ -113,20 +119,18 @@ def _run_tippecanoe_region(
         "--force",
         f"--minimum-zoom={min_zoom}",
         f"--maximum-zoom={max_zoom}",
-        f"{'--base-zoom=' + str(base_zoom) if base_zoom else ''}",
         "--drop-densest-as-needed",
         "--no-tile-size-limit",
         "--output=" + str(result),
         f"--temporary-directory={tmp_dir}",
         f"--layer={layer_name}",
-        "-e",
-        "--attribution=''",
         "--quiet",
         str(bucket),
     ]
-    eased = [part for part in cmd if part]
+    if base_zoom is not None:
+        cmd.insert(3, f"--base-zoom={base_zoom}")
     try:
-        proc = subprocess.run(eased, capture_output=True, text=True, timeout=None)  # noqa: S603, PLW1510
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=None)  # noqa: S603, PLW1510
     except FileNotFoundError as exc:
         raise RuntimeError(f"tippecanoe nie znaleziony: {exc}") from exc
     finally:
@@ -213,8 +217,8 @@ def run_parallel_tiles(
     merged.unlink(missing_ok=True)
     for _, region in mbtiles:
         region.unlink(missing_ok=True)
-    for _, bucket in bucketed:
-        bucket.unlink(missing_ok=True)
+    for leftover in staging_dir.glob("kraj_dzialki.voiv*"):
+        leftover.unlink(missing_ok=True)
     logger.info(
         "parallel_tiles_done", output=str(output_pmtiles), bytes=output_pmtiles.stat().st_size
     )
