@@ -362,6 +362,12 @@ git worktree remove ../wt-<modul> --force && git branch -d <branch>
 - **IndexedDB między testami**: kontekst Playwright ma świeży profil — nie używaj `deleteDatabase` w `initScript` (podmienia dane przy każdej nawigacji/reload).
 - **Testy mobile**: `hasTouch: true` (nie `isMobile` — quirk headless Chromium w Playwright).
 
+### 11.3a Vitest i RAM (twardy limit)
+
+- **`vitest.config.ts` ma `maxThreads: 2`** — jsdom worker to ~2,3 GB RAM; przy 16 CPU bez capu vitest zrobił ~37 GB i zamroził system (incydent 2026-10-12). Nie podnoś limitu bez rozmowy z nadzorcą i wolnym RAM-em.
+- **Rule of one**: w jednym momencie max **jeden** run `npm test` w całym środowisku (worktree + nadzorca). Równoległe gate'y agentów = serializuj; nadzorca weryfikuje worktree jeden po drugim.
+- Coverage run jest droższy od zwykłego — uruchamiaj go raz na koniec pracy, nie przy każdym commicie.
+
 ### 11.4 Artefakty i debug — repo czyste na końcu sesji
 
 - **Screenshoty debug (PNG)** zapisuj poza repo (np. `/tmp/opencode`) albo usuwaj od razu — nie wolno trzymać `*.png` w root ani śledzonych PNG w repo (sprzątanie 2026-10-09: 11+ usuniętych). `.gitignore` ma reguły (`/e2e-*.png` i podobne).
