@@ -10,6 +10,19 @@ async function createActiveProject(page: Page): Promise<void> {
   await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
 }
 
+async function createNamedProject(page: Page, name: string): Promise<void> {
+  await page.goto('/projects');
+  await expect(page.getByTestId('new-project')).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(300);
+  await page.getByTestId('new-project').click();
+  await expect(page.getByTestId('create-dialog')).toBeVisible();
+  const input = page.getByTestId('create-name-input');
+  await input.clear();
+  await input.fill(name);
+  await page.getByTestId('create-save').click();
+  await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
+}
+
 async function openSettings(page: Page): Promise<void> {
   await page.goto('/settings');
   await expect(page.getByTestId('species-editor')).toBeVisible({ timeout: 15_000 });
@@ -130,19 +143,14 @@ test.describe('Settings flows (BACKLOG C)', () => {
   });
 
   test('should export and import backup with overwrite mode roundtrip', async ({ page }) => {
-    await createActiveProject(page);
+    await createNamedProject(page, 'Projekt 1');
     await openSettings(page);
 
     await page.getByLabel('Przedział 1 od').fill('25');
     await page.getByTestId('ranges-save').click();
     await expect(page.getByTestId('ranges-saved')).toBeVisible();
 
-    await page.goto('/projects');
-    await page.waitForTimeout(300);
-    await page.getByTestId('new-project').click();
-    await expect(page.getByTestId('create-dialog')).toBeVisible();
-    await page.getByTestId('create-save').click();
-    await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
+    await createNamedProject(page, 'Projekt 2');
 
     await page.goto('/settings');
     await expect(page.getByTestId('backup-panel')).toBeVisible({ timeout: 15_000 });
@@ -171,8 +179,35 @@ test.describe('Settings flows (BACKLOG C)', () => {
       .click();
     await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole('link', { name: 'Ustawienia' }).click();
-    await expect(page.getByTestId('ranges-editor')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByLabel('Przedział 1 od')).toHaveValue('25', { timeout: 15_000 });
+    // Po zaimportowaniu konfigurację Projektu 1 walidujemy wprost w Dexie:
+    // pełna nawigacja page.goto('/settings') resetuje aktywny projekt w store,
+    // a auto-select wybiera zawsze najnowszy (Projekt 2).
+    const ranges1 = await page.evaluate(
+      () =>
+        new Promise<number>((resolve, reject) => {
+          const openRequest = indexedDB.open('wycinka');
+          openRequest.onerror = () => reject(openRequest.error);
+          openRequest.onsuccess = () => {
+            const database = openRequest.result;
+            const request = database
+              .transaction('projects', 'readonly')
+              .objectStore('projects')
+              .getAll();
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+              database.close();
+              resolve(
+                (
+                  request.result as Array<{
+                    name: string;
+                    rangesConfig?: Array<{ from: number }>;
+                  }>
+                ).find((p) => p.name === 'Projekt 1')?.rangesConfig?.[0]?.from ?? -1,
+              );
+            };
+          };
+        }),
+    );
+    expect(ranges1).toBe(25);
   });
 });

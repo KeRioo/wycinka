@@ -1,4 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { openProjectViaLauncherWithFab, waitForMapIdle } from './helpers';
+
+const MINIMAL_PMTILES = readFileSync(
+  join(new URL('.', import.meta.url).pathname, 'fixtures/minimal.pmtiles'),
+);
 
 function parcelBody(id: string, area: number): Record<string, unknown> {
   return {
@@ -37,26 +44,11 @@ function parcelBody(id: string, area: number): Record<string, unknown> {
 }
 
 async function ensureProject(page: Page): Promise<void> {
-  await page.goto('/map');
-  await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
-  await page.waitForTimeout(500);
-  const createBtn = page.getByTestId('create-first-project');
-  if (await createBtn.isVisible().catch(() => false)) {
-    await createBtn.click({ force: true });
-    await expect(page.getByText(/Brak projektu/)).not.toBeVisible({ timeout: 5_000 });
-  }
-  await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
+  await openProjectViaLauncherWithFab(page);
 }
 
 test.describe('Multi-parcel project', () => {
   test.beforeEach(async ({ context }) => {
-    await context.addInitScript(() => {
-      try {
-        indexedDB.deleteDatabase('wycinka');
-      } catch {
-        // ignore
-      }
-    });
     await context.route('**/api/v1/version', (route) => {
       void route.fulfill({
         status: 200,
@@ -70,7 +62,11 @@ test.describe('Multi-parcel project', () => {
       });
     });
     await context.route('**/api/v1/pmtiles/**', (route) => {
-      void route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      void route.fulfill({
+        status: 200,
+        contentType: 'application/octet-stream',
+        body: MINIMAL_PMTILES,
+      });
     });
     await context.route('**/api/v1/parcel*', (route) => {
       const url = new URL(route.request().url());
@@ -141,20 +137,22 @@ test.describe('Multi-parcel project', () => {
       .first()
       .click();
     await expect(page.getByTestId('add-parcel-to-project')).toHaveCount(0);
+    await waitForMapIdle(page);
 
     await page.mouse.click(box.x + (box.width / 4) * 3, box.y + box.height * 0.75);
     const addSouth = page.getByTestId('add-parcel-to-project');
     await expect(addSouth).toBeVisible({ timeout: 10_000 });
     await addSouth.click();
 
-    await page.getByRole('link', { name: /Projekty/i }).click();
+    await page.goto('/projects');
     await expect(page.getByTestId('active-project-panel')).toBeVisible();
     await expect(page.getByTestId('project-parcel-count')).toHaveText('Działki: 2');
     await expect(page.getByTestId('parcel-chip-141201_1.0001.6501')).toBeVisible();
     await expect(page.getByTestId('parcel-chip-141201_1.0001.6502')).toBeVisible();
 
-    await page.getByRole('link', { name: /Mapa/i }).click();
+    await page.goto('/app');
     await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('fab-add-tree').click({ timeout: 10_000 });
     await expect(page.getByTestId('add-tree-panel')).toBeVisible();

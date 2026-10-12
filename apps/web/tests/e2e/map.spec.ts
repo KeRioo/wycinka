@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { openProjectViaLauncher } from './helpers';
 
-test.describe('MapPage', () => {
+test.describe('MapPage na /app', () => {
   test.beforeEach(async ({ page }) => {
     await page.route('**/api/v1/version', async (route) => {
       await route.fulfill({
@@ -16,22 +17,17 @@ test.describe('MapPage', () => {
     });
   });
 
-  test('should render header and navigation', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.getByRole('link', { name: /Wycinka Drzew/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Mapa/i })).toBeVisible();
-  });
-
-  test('should navigate to /map and show map container', async ({ page }) => {
-    await page.goto('/map');
-    await expect(page).toHaveURL(/\/map$/);
+  test('should navigate to /app via launcher and show map container', async ({ page }) => {
+    await openProjectViaLauncher(page);
+    await expect(page).toHaveURL(/\/app$/);
     await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('app-header')).toBeVisible();
   });
 
-  test('should show hero CTA on home page', async ({ page }) => {
-    await page.goto('/');
-    const cta = page.getByRole('link', { name: /Otwórz mapę/i });
-    await expect(cta).toBeVisible();
+  test('should redirect bare /app to start when no project exists', async ({ page }) => {
+    await page.goto('/app');
+    await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
+    await expect(page.getByTestId('start-new-project')).toBeVisible();
   });
 
   test('should show 404 for unknown routes', async ({ page }) => {
