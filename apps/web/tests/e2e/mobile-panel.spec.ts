@@ -107,14 +107,17 @@ test.describe('Mobile — AddTreePanel bottom sheet', () => {
     await page.waitForTimeout(700);
     const box = await panel.boundingBox();
     const viewport = page.viewportSize();
+    const mapBox = await page.getByTestId('map-container').boundingBox();
     if (box === null || viewport === null) {
       throw new Error('panel box missing');
     }
     const heightRatio = box.height / viewport.height;
-    expect(heightRatio).toBeGreaterThanOrEqual(0.45);
-    expect(heightRatio).toBeLessThanOrEqual(0.55);
-    expect(box.y).toBeGreaterThanOrEqual(viewport.height * 0.3);
+    expect(heightRatio).toBeGreaterThanOrEqual(0.47);
+    expect(heightRatio).toBeLessThanOrEqual(0.53);
+    expect(box.y).toBeGreaterThanOrEqual(viewport.height * 0.47);
     expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+    expect(mapBox === null ? 1e9 : mapBox.y + mapBox.height).toBeLessThanOrEqual(box.y + 2);
+    expect(page.getByTestId('panel-spacer')).toHaveAttribute('data-panel-kind', 'add-tree');
 
     const arrowPad = page.getByTestId('nudge-right');
     await expect(arrowPad).toBeVisible();

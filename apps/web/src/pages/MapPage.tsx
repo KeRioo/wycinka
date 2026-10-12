@@ -12,6 +12,8 @@ import Fab from '@/components/trees/Fab';
 import TreeListPanel from '@/components/trees/TreeListPanel';
 import TreePopup from '@/components/trees/TreePopup';
 import PdfExportDialog from '@/components/pdf/PdfExportDialog';
+import { PANEL_MOBILE_HEIGHT_CLASS } from '@/components/layout/AppModalShell';
+import { useMobileViewport } from '@/hooks/useMobileViewport';
 import { buildPendingFeature, treesToFeatureCollection } from '@/components/trees/TreeMarkers';
 import type { TreeFeatureProperties } from '@/components/map/MapView';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
@@ -20,6 +22,7 @@ import { useMapStore } from '@/stores/mapStore';
 import { ensureActiveProject, useProjectStore } from '@/stores/projectStore';
 import { draftPosition, useTreeStore } from '@/stores/treeStore';
 import { parcelFitBounds } from '@/lib/geo';
+import { cn } from '@/lib/utils';
 
 export default function MapPage(): JSX.Element {
   const [mapReady, setMapReady] = useState(false);
@@ -174,6 +177,7 @@ export default function MapPage(): JSX.Element {
         tree={tree}
         onEdit={() => {
           useTreeStore.getState().selectTreeForEdit(tree.id);
+          useTreeStore.getState().setListPanelOpen(false);
           setSelectedTreeId(null);
         }}
         onDelete={() => {
@@ -245,6 +249,7 @@ export default function MapPage(): JSX.Element {
     if (activeProjectId === null) {
       return;
     }
+    setListPanelOpen(false);
     if (position !== null) {
       startPlacing({ gpsPosition: position });
     } else if (selectedParcel !== null) {
@@ -264,144 +269,159 @@ export default function MapPage(): JSX.Element {
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const isLoadingProjects = projectsStatus === 'loading';
 
+  const isMobileViewport = useMobileViewport();
+  const addTreePanelOpen = mode !== 'idle' && pending !== null;
+  const splitPanelKind: 'add-tree' | 'list' | null = !isMobileViewport
+    ? null
+    : addTreePanelOpen
+      ? 'add-tree'
+      : listPanelOpen
+        ? 'list'
+        : null;
+
   return (
-    <div className="relative h-full w-full">
-      <MapClickHandler
-        onMapReady={handleMapReady}
-        treeLayer={treeLayer}
-        onTreeClick={handleTreeClick}
-      />
+    <div className="relative flex h-full w-full flex-col">
+      <div data-testid="map-area" className="relative min-h-0 flex-1">
+        <MapClickHandler
+          onMapReady={handleMapReady}
+          treeLayer={treeLayer}
+          onTreeClick={handleTreeClick}
+        />
 
-      <MapControls
-        map={mapReady ? mapRef.current : null}
-        position={position}
-        onRetryGps={refresh}
-      />
-      <GpsCrosshair map={mapReady ? mapRef.current : null} position={position} />
+        <MapControls
+          map={mapReady ? mapRef.current : null}
+          position={position}
+          onRetryGps={refresh}
+        />
+        <GpsCrosshair map={mapReady ? mapRef.current : null} position={position} />
 
-      <aside
-        data-testid="map-overlays"
-        className="pointer-events-none absolute left-4 top-4 max-w-[70vw] space-y-2 sm:max-w-sm"
-      >
-        {isLoading && (
-          <Card className="pointer-events-auto">
-            <CardContent className="flex items-center gap-3 p-3 text-sm text-forest-700">
-              <span
-                aria-hidden="true"
-                className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-forest-500 border-t-transparent"
-              />
-              Wyszukiwanie działki…
-            </CardContent>
-          </Card>
+        <aside
+          data-testid="map-overlays"
+          className="pointer-events-none absolute left-4 top-4 max-w-[70vw] space-y-2 sm:max-w-sm"
+        >
+          {isLoading && (
+            <Card className="pointer-events-auto">
+              <CardContent className="flex items-center gap-3 p-3 text-sm text-forest-700">
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-forest-500 border-t-transparent"
+                />
+                Wyszukiwanie działki…
+              </CardContent>
+            </Card>
+          )}
+          {error !== null && (
+            <Card className="pointer-events-auto border-red-300 bg-red-50">
+              <CardContent className="space-y-2 p-3 text-sm text-red-800">
+                <p className="font-medium">Błąd</p>
+                <p>{error}</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setError(null);
+                  }}
+                >
+                  Zamknij
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          {selectedParcel && (
+            <ParcelCard
+              parcel={selectedParcel}
+              onClose={() => {
+                setSelected(null);
+              }}
+              action={
+                projectParcels.some((p) => p.teryt === selectedParcel.teryt)
+                  ? { kind: 'remove' }
+                  : { kind: 'add', disabled: activeProjectId === null }
+              }
+              onAdd={(parcel) => {
+                void addParcelToProject(parcel);
+              }}
+              onRemove={(teryt) => {
+                void removeParcelFromProject(teryt);
+              }}
+            />
+          )}
+          {!hasProject && !isLoadingProjects && projects.length === 0 && (
+            <Card className="pointer-events-auto">
+              <CardContent className="space-y-3 p-4 text-sm text-stone-700">
+                <p>Brak projektu. Utwórz pierwszy projekt, aby zacząć dodawać drzewa.</p>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  data-testid="create-first-project"
+                  onClick={() => {
+                    void handleCreateProject();
+                  }}
+                >
+                  Utwórz projekt
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </aside>
+
+        {toast !== null && (
+          <div
+            role="alert"
+            data-testid="toast"
+            className="pointer-events-auto absolute bottom-16 left-1/2 z-30 -translate-x-1/2 rounded-md bg-stone-900/90 px-4 py-2 text-sm text-white shadow-lg"
+          >
+            {toast}
+          </div>
         )}
-        {error !== null && (
-          <Card className="pointer-events-auto border-red-300 bg-red-50">
-            <CardContent className="space-y-2 p-3 text-sm text-red-800">
-              <p className="font-medium">Błąd</p>
-              <p>{error}</p>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setError(null);
-                }}
-              >
-                Zamknij
-              </Button>
-            </CardContent>
-          </Card>
+
+        {hasProject && mode === 'idle' && <Fab onClick={handleStartPlacing} className="absolute" />}
+
+        {hasProject && mode === 'idle' && (
+          <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Pokaż listę drzew"
+              aria-expanded={listPanelOpen}
+              data-testid="tree-list-toggle"
+              onClick={() => {
+                setListPanelOpen(!listPanelOpen);
+              }}
+              className="flex h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-medium text-forest-800 shadow-lg transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 focus-visible:ring-offset-2"
+            >
+              <List aria-hidden="true" className="h-5 w-5" />
+              <span>Drzewa</span>
+              <span className="w-full min-w-6 rounded-full bg-forest-100 text-center text-xs font-semibold text-forest-800">
+                {trees.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              aria-label="Eksportuj PDF"
+              data-testid="pdf-export-toggle"
+              disabled={trees.length === 0}
+              onClick={() => {
+                setPdfDialogOpen(true);
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-forest-800 shadow-lg transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 focus-visible:ring-offset-2 disabled:text-stone-300"
+            >
+              <FileDown aria-hidden="true" className="h-5 w-5" />
+            </button>
+          </div>
         )}
-        {selectedParcel && (
-          <ParcelCard
-            parcel={selectedParcel}
+
+        {hasProject && activeProject !== null && (
+          <PdfExportDialog
+            open={pdfDialogOpen}
+            project={activeProject}
+            trees={trees}
+            parcels={projectParcels}
             onClose={() => {
-              setSelected(null);
-            }}
-            action={
-              projectParcels.some((p) => p.teryt === selectedParcel.teryt)
-                ? { kind: 'remove' }
-                : { kind: 'add', disabled: activeProjectId === null }
-            }
-            onAdd={(parcel) => {
-              void addParcelToProject(parcel);
-            }}
-            onRemove={(teryt) => {
-              void removeParcelFromProject(teryt);
+              setPdfDialogOpen(false);
             }}
           />
         )}
-        {!hasProject && !isLoadingProjects && projects.length === 0 && (
-          <Card className="pointer-events-auto">
-            <CardContent className="space-y-3 p-4 text-sm text-stone-700">
-              <p>Brak projektu. Utwórz pierwszy projekt, aby zacząć dodawać drzewa.</p>
-              <Button
-                size="sm"
-                variant="primary"
-                data-testid="create-first-project"
-                onClick={() => {
-                  void handleCreateProject();
-                }}
-              >
-                Utwórz projekt
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </aside>
-
-      {toast !== null && (
-        <div
-          role="alert"
-          data-testid="toast"
-          className="pointer-events-auto absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-md bg-stone-900/90 px-4 py-2 text-sm text-white shadow-lg"
-        >
-          {toast}
-        </div>
-      )}
-
-      {hasProject && mode === 'idle' && <Fab onClick={handleStartPlacing} />}
-
-      {hasProject && (
-        <button
-          type="button"
-          aria-label="Pokaż listę drzew"
-          aria-expanded={listPanelOpen}
-          data-testid="tree-list-toggle"
-          onClick={() => {
-            setListPanelOpen(!listPanelOpen);
-          }}
-          className="fixed bottom-14 left-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-white text-forest-800 shadow-lg transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 focus-visible:ring-offset-2"
-        >
-          <List aria-hidden="true" className="h-6 w-6" />
-        </button>
-      )}
-
-      {hasProject && (
-        <button
-          type="button"
-          aria-label="Eksportuj PDF"
-          data-testid="pdf-export-toggle"
-          disabled={trees.length === 0}
-          onClick={() => {
-            setPdfDialogOpen(true);
-          }}
-          className="fixed bottom-14 left-20 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-white text-forest-800 shadow-lg transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500 focus-visible:ring-offset-2 disabled:text-stone-300"
-        >
-          <FileDown aria-hidden="true" className="h-6 w-6" />
-        </button>
-      )}
-
-      {hasProject && activeProject !== null && (
-        <PdfExportDialog
-          open={pdfDialogOpen}
-          project={activeProject}
-          trees={trees}
-          parcels={projectParcels}
-          onClose={() => {
-            setPdfDialogOpen(false);
-          }}
-        />
-      )}
+      </div>
 
       <TreeListPanel
         open={listPanelOpen}
@@ -420,6 +440,15 @@ export default function MapPage(): JSX.Element {
         gpsError={gpsError}
         onRefreshGps={refresh}
       />
+
+      {splitPanelKind !== null && (
+        <div
+          aria-hidden="true"
+          data-testid="panel-spacer"
+          data-panel-kind={splitPanelKind}
+          className={cn(PANEL_MOBILE_HEIGHT_CLASS, 'shrink-0')}
+        />
+      )}
 
       <noscript className="absolute inset-0 flex items-center justify-center bg-stone-100 p-4 text-center">
         <p className="text-stone-700">Mapa wymaga włączonej obsługi JavaScript.</p>

@@ -1,8 +1,30 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Tree } from '@/db/schema';
 import TreeListPanel from '@/components/trees/TreeListPanel';
+
+type MediaListener = () => void;
+
+const mediaQueryState = vi.hoisted(() => ({
+  matches: false,
+  listeners: [] as MediaListener[],
+}));
+
+function installMatchMedia(matches: boolean): void {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn((_type: string, listener: MediaListener) => {
+      mediaQueryState.listeners.push(listener);
+    }),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: () => false,
+  }));
+}
 
 function makeTree(overrides: Partial<Tree> = {}): Tree {
   return {
@@ -151,5 +173,50 @@ describe('TreeListPanel', () => {
     );
     await user.click(screen.getByTestId('tree-list-close'));
     expect(handlers.onClose).toHaveBeenCalled();
+  });
+});
+
+describe('TreeListPanel — split panel container (B4)', () => {
+  beforeEach(() => {
+    mediaQueryState.matches = false;
+    mediaQueryState.listeners = [];
+  });
+
+  it('should render inside the bottom-half split shell on mobile', () => {
+    installMatchMedia(true);
+    render(
+      <TreeListPanel
+        open
+        onClose={vi.fn()}
+        trees={[makeTree()]}
+        onSelectTree={vi.fn()}
+        onDeleteTree={vi.fn()}
+        onEditTree={vi.fn()}
+      />,
+    );
+    const panel = screen.getByTestId('tree-list-panel');
+    expect(panel).toHaveAttribute('data-split-panel', 'true');
+    expect(panel.className).toContain('h-[50dvh]');
+    expect(panel.className).toContain('min-h-[300px]');
+    expect(panel.className).toContain('rounded-t-2xl');
+  });
+
+  it('should keep the right drawer layout on desktop', () => {
+    installMatchMedia(false);
+    render(
+      <TreeListPanel
+        open
+        onClose={vi.fn()}
+        trees={[makeTree()]}
+        onSelectTree={vi.fn()}
+        onDeleteTree={vi.fn()}
+        onEditTree={vi.fn()}
+      />,
+    );
+    const panel = screen.getByTestId('tree-list-panel');
+    expect(panel).toHaveAttribute('data-split-panel', 'false');
+    expect(panel.className).toContain('border-l');
+    expect(panel.className).toContain('w-80');
+    expect(panel.className).not.toContain('h-[50dvh]');
   });
 });
