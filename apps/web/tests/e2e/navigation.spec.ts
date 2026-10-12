@@ -1,5 +1,18 @@
 import { expect, test } from '@playwright/test';
 
+// §12.2: po utworzeniu projektu modal ustawień otwiera się automatycznie
+async function closeAutoSettings(page: import('@playwright/test').Page): Promise<void> {
+  const modal = page.getByTestId('settings-modal');
+  const appeared = await modal
+    .waitFor({ state: 'visible', timeout: 4000 })
+    .then(() => true)
+    .catch(() => false);
+  if (appeared) {
+    await page.getByTestId('settings-close').click();
+    await expect(modal).toHaveCount(0);
+  }
+}
+
 test.describe('Nawigacja Redesign v2 (launcher → aplikacja)', () => {
   test.beforeEach(async ({ context }) => {
     await context.route('**/api/v1/version', async (route) => {
@@ -41,6 +54,7 @@ test.describe('Nawigacja Redesign v2 (launcher → aplikacja)', () => {
     await expect(page.getByTestId('create-name-input')).toHaveValue('Mój projekt');
     await page.getByTestId('create-name-input').fill('Las Otwock');
     await page.getByTestId('create-save').click();
+    await closeAutoSettings(page);
 
     await expect(page).toHaveURL(/\/app$/, { timeout: 15_000 });
     await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
@@ -53,6 +67,7 @@ test.describe('Nawigacja Redesign v2 (launcher → aplikacja)', () => {
     await page.getByTestId('start-new-project').click();
     await expect(page.getByTestId('create-dialog')).toBeVisible();
     await page.getByTestId('create-save').click();
+    await closeAutoSettings(page);
     await expect(page).toHaveURL(/\/app$/, { timeout: 15_000 });
     await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
 
@@ -73,6 +88,7 @@ test.describe('Nawigacja Redesign v2 (launcher → aplikacja)', () => {
     await page.getByTestId('start-new-project').click();
     await expect(page.getByTestId('create-dialog')).toBeVisible();
     await page.getByTestId('create-save').click();
+    await closeAutoSettings(page);
     await expect(page).toHaveURL(/\/app$/, { timeout: 15_000 });
     await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
 
@@ -89,6 +105,7 @@ test.describe('Nawigacja Redesign v2 (launcher → aplikacja)', () => {
     await page.getByTestId('start-new-project').click();
     await expect(page.getByTestId('create-dialog')).toBeVisible();
     await page.getByTestId('create-save').click();
+    await closeAutoSettings(page);
     await expect(page).toHaveURL(/\/app$/, { timeout: 15_000 });
 
     await page.getByTestId('app-menu').click();

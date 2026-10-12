@@ -14,6 +14,16 @@ export async function openProjectViaLauncher(page: Page): Promise<void> {
 
   await page.waitForURL(/\/app$/, { timeout: TIMEOUT });
   await expect(page.getByTestId('map-container')).toBeVisible({ timeout: TIMEOUT });
+  // §12.2: modal ustawień otwiera się automatycznie po utworzeniu projektu
+  const modal = page.getByTestId('settings-modal');
+  const appeared = await modal
+    .waitFor({ state: 'visible', timeout: 4000 })
+    .then(() => true)
+    .catch(() => false);
+  if (appeared) {
+    await page.getByTestId('settings-close').click();
+    await expect(modal).toHaveCount(0);
+  }
 }
 
 export async function openProjectViaLauncherWithFab(page: Page): Promise<void> {
