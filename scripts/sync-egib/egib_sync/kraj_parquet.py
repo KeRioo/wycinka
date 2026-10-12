@@ -297,6 +297,43 @@ class KrajParquetReader:
                         return
                     yield record
 
+    def iter_parcels_shard(
+        self,
+        shard_index: int,
+        total_shards: int,
+        *,
+        batch_rows: int = 50_000,
+        transformer: Transformer | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield canonical parcels for one shard of row groups.
+
+        Row groups are distributed modulo-style (``rg % total_shards ==
+        shard_index``), so N workers cover the file without overlap and
+        without sharing the ParquetFile handle.
+        """
+        if total_shards <= 0:
+            raise ValueError(f"total_shards must be positive, got {total_shards}")
+        if not 0 <= shard_index < total_shards:
+            raise ValueError(
+                f"shard_index must be in [0, {total_shards - 1}], got {shard_index}"
+            )
+        if batch_rows <= 0:
+            raise ValueError(f"batch_rows must be positive, got {batch_rows}")
+        tf = transformer if transformer is not None else make_transformer()
+        for rg in range(shard_index, self.num_row_groups, total_shards):
+            table = self._pf.read_row_group(rg, columns=None)
+            for start in range(0, table.num_rows, batch_rows):
+                slice_table = table.slice(start, batch_rows)
+                records, rg_stats = canonicalize_table(slice_table, tf)
+                self.stats = KrajReadStats(
+                    row_groups=self.stats.row_groups + 1,
+                    rows=self.stats.rows + rg_stats.rows,
+                    kept=self.stats.kept + rg_stats.kept,
+                    skipped_teryt=self.stats.skipped_teryt + rg_stats.skipped_teryt,
+                    skipped_geometry=self.stats.skipped_geometry + rg_stats.skipped_geometry,
+                )
+                yield from records
+
 
 def download_kraj_parquet(
     url: str,

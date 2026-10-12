@@ -17,6 +17,7 @@ reports the error in :class:`KrajPipelineResult.errors`.
 from __future__ import annotations
 
 import json
+import multiprocessing
 import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -24,7 +25,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from egib_sync.config import Settings
-from egib_sync.geojsonseq import write_geojsonseq_gzip
+from egib_sync.geojsonseq import GeojsonSeqError, write_geojsonseq_gzip
 from egib_sync.kraj_parquet import (
     KRAJ_DATASOURCE,
     KrajParquetError,
@@ -91,6 +92,55 @@ def count_parcel_duplicates(db_path: Path) -> int:
         conn.close()
 
 
+def _stage_geojsonseq_sharded(
+    parquet_path: Path,
+    settings: Settings,
+    *,
+    shards: int,
+    batch_rows: int,
+    output: Path,
+) -> tuple[int, list[Path]]:
+    """Stage 1 (sharded): N processes each read their own row groups.
+
+    Each worker writes ``output.shard{i}`` (gzipped GeoJSONSeq). The shard
+    files are consumed by tippecanoe via ``cat`` (order is irrelevant) and
+    by the SQLite stage. Row groups are distributed modulo-style, so the
+    country is covered without overlap.
+    """
+
+    def _worker(args: tuple[int, int, int]) -> tuple[int, str]:
+        shard_index, total_shards, batch = args
+        reader = KrajParquetReader(parquet_path)
+        shard_output = Path(str(output) + f".shard{shard_index}")
+        count = write_geojsonseq_gzip(
+            reader.iter_parcels_shard(shard_index, total_shards, batch_rows=batch),
+            shard_output,
+        )
+        reader.close()
+        return count, str(shard_output)
+
+    jobs = [(i, shards, batch_rows) for i in range(shards)]
+    ctx = multiprocessing.get_context("fork")
+    with ctx.Pool(processes=shards) as pool:
+        results = pool.map(_worker, jobs)
+
+    total = 0
+    shard_paths: list[Path] = []
+    for count, path in results:
+        total += count
+        shard_paths.append(Path(path))
+    shard_paths.sort(key=lambda p: int(str(p).rsplit("shard", 1)[-1]))
+    logger.info(
+        "kraj_stage_geojsonseq_shards_done",
+        features=total,
+        shards=shards,
+        bytes=sum(p.stat().st_size for p in shard_paths),
+    )
+    if total == 0:
+        raise GeojsonSeqError(f"no parcels to write, aborting GeoJSONSeq export: {output}")
+    return total, shard_paths
+
+
 def _stage_geojsonseq(
     reader: KrajParquetReader,
     settings: Settings,
@@ -119,24 +169,44 @@ def _stage_tiles(
     geojsonseq_path: Path,
     pmtiles_output: Path,
     staging_dir: Path,
+    geojsonseq_paths: list[Path] | None = None,
 ) -> int:
-    """Stage 2: GeoJSONSeq -> tippecanoe (stdin stream) -> PMTiles v3."""
+    """Stage 2: GeoJSONSeq -> tippecanoe (stdin stream) -> PMTiles v3.
+
+    ``geojsonseq_paths`` = sharded inputs (consumed via ``cat``); takes
+    priority over the single ``geojsonseq_path``.
+    """
     tmp_tiles_dir = staging_dir / "tippecanoe-tmp"
     tmp_tiles_dir.mkdir(parents=True, exist_ok=True)
     try:
-        generate_pmtiles_geojsonseq(
-            geojsonseq_path,
-            pmtiles_output,
-            min_zoom=settings.kraj.min_zoom,
-            max_zoom=settings.kraj.max_zoom,
-            base_zoom=settings.kraj.base_zoom,
-            layer_name=settings.kraj.layer_name,
-            tippecanoe_path=settings.kraj.tippecanoe_path,
-            drop_densest=settings.kraj.drop_densest,
-            extend_zooms=settings.kraj.extend_zooms,
-            temporary_directory=tmp_tiles_dir,
-            pmtiles_convert_path=settings.kraj.pmtiles_convert_path,
-        )
+        if geojsonseq_paths is not None:
+            generate_pmtiles_geojsonseq(
+                geojsonseq_paths,
+                pmtiles_output,
+                min_zoom=settings.kraj.min_zoom,
+                max_zoom=settings.kraj.max_zoom,
+                base_zoom=settings.kraj.base_zoom,
+                layer_name=settings.kraj.layer_name,
+                tippecanoe_path=settings.kraj.tippecanoe_path,
+                drop_densest=settings.kraj.drop_densest,
+                extend_zooms=settings.kraj.extend_zooms,
+                temporary_directory=tmp_tiles_dir,
+                pmtiles_convert_path=settings.kraj.pmtiles_convert_path,
+            )
+        else:
+            generate_pmtiles_geojsonseq(
+                geojsonseq_path,
+                pmtiles_output,
+                min_zoom=settings.kraj.min_zoom,
+                max_zoom=settings.kraj.max_zoom,
+                base_zoom=settings.kraj.base_zoom,
+                layer_name=settings.kraj.layer_name,
+                tippecanoe_path=settings.kraj.tippecanoe_path,
+                drop_densest=settings.kraj.drop_densest,
+                extend_zooms=settings.kraj.extend_zooms,
+                temporary_directory=tmp_tiles_dir,
+                pmtiles_convert_path=settings.kraj.pmtiles_convert_path,
+            )
     finally:
         if tmp_tiles_dir.exists():
             shutil.rmtree(tmp_tiles_dir, ignore_errors=True)
@@ -192,6 +262,7 @@ def run_kraj_pipeline(
     max_row_groups: int | None = None,
     max_rows: int | None = None,
     dry_run: bool = False,
+    shards: int = 1,
 ) -> KrajPipelineResult:
     """Run the kraj pipeline on a GeoParquet export.
 
@@ -211,6 +282,7 @@ def run_kraj_pipeline(
     sqlite_path = db_output or settings.sqlite_path
     settings.ensure_dirs()
     staging = settings.staging_dir
+    kraj_shards = shards if shards >= 1 else 1
 
     try:
         reader = KrajParquetReader(parquet_path)
@@ -244,15 +316,34 @@ def run_kraj_pipeline(
             )
 
         geojsonseq_bytes = 0
+        shard_paths: list[Path] | None = None
         if not skip_tiles:
-            geojsonseq_bytes = _stage_geojsonseq(
-                reader,
-                settings,
-                batch_rows=settings.kraj.read_batch_rows,
-                max_row_groups=max_row_groups,
-                max_rows=max_rows,
-                output=geojsonseq_path,
-            )
+            if max_row_groups is not None or max_rows is not None:
+                geojsonseq_bytes = _stage_geojsonseq(
+                    reader,
+                    settings,
+                    batch_rows=settings.kraj.read_batch_rows,
+                    max_row_groups=max_row_groups,
+                    max_rows=max_rows,
+                    output=geojsonseq_path,
+                )
+            elif kraj_shards > 1:
+                geojsonseq_bytes, shard_paths = _stage_geojsonseq_sharded(
+                    parquet_path,
+                    settings,
+                    shards=kraj_shards,
+                    batch_rows=settings.kraj.read_batch_rows,
+                    output=geojsonseq_path,
+                )
+            else:
+                geojsonseq_bytes = _stage_geojsonseq(
+                    reader,
+                    settings,
+                    batch_rows=settings.kraj.read_batch_rows,
+                    max_row_groups=max_row_groups,
+                    max_rows=max_rows,
+                    output=geojsonseq_path,
+                )
 
         parcels = 0
         duplicates = 0
@@ -283,6 +374,7 @@ def run_kraj_pipeline(
                 pmtiles_bytes = _stage_tiles(
                     settings,
                     geojsonseq_path=geojsonseq_path,
+                    geojsonseq_paths=shard_paths,
                     pmtiles_output=pmtiles_path,
                     staging_dir=staging,
                 )
@@ -299,6 +391,8 @@ def run_kraj_pipeline(
                     geojsonseq_bytes=geojsonseq_bytes,
                 )
             geojsonseq_path.unlink(missing_ok=True)
+            for shard in shard_paths or ():
+                shard.unlink(missing_ok=True)
 
         metadata_errors: list[str] = []
         try:

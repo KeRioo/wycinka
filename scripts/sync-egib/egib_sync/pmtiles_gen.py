@@ -160,19 +160,33 @@ def _build_stream_command(
 
 def _run_tippecanoe_from_gzip(
     command: list[str],
-    input_geojsonseq: Path,
+    input_geojsonseq: Path | list[Path],
     *,
     timeout_seconds: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Pipe ``gzip -dc <file>`` into tippecanoe's stdin and wait.
+    """Pipe ``gzip -dc <file(s)>`` into tippecanoe's stdin and wait.
 
     Both process return codes are checked: a silently-failed decompressor
-    must not look like a successful tippecanoe run.
+    must not look like a successful tippecanoe run. With a list of files
+    ``cat`` streams them into gzip (sharded inputs, order is irrelevant).
     """
-    gunzip = subprocess.Popen(  # noqa: S603
-        ["gzip", "-dc", str(input_geojsonseq)],  # noqa: S607
-        stdout=subprocess.PIPE,
-    )
+    if isinstance(input_geojsonseq, list):
+        if not input_geojsonseq:
+            raise ValueError("empty input file list")
+        input_files_ = input_geojsonseq
+        gunzip = subprocess.Popen(  # noqa: S603
+            [  # noqa: S607 — 'sh' jest w PATH; inputy są walidowane wyżej
+                "sh",
+                "-c",
+                "cat " + " ".join(f"'{p}'" for p in input_files_) + " | gzip -dc",
+            ],
+            stdout=subprocess.PIPE,
+        )
+    else:
+        gunzip = subprocess.Popen(  # noqa: S603
+            ["gzip", "-dc", str(input_geojsonseq)],  # noqa: S607
+            stdout=subprocess.PIPE,
+        )
     gunzip_code = 0
     try:
         result = subprocess.run(  # noqa: S603
@@ -387,7 +401,7 @@ def generate_pmtiles(
 
 
 def generate_pmtiles_geojsonseq(
-    input_geojsonseq: Path,
+    input_geojsonseq: Path | list[Path],
     output_pmtiles: Path,
     *,
     min_zoom: int = 12,
@@ -415,7 +429,13 @@ def generate_pmtiles_geojsonseq(
     MBTiles, so the staging file is converted to PMTiles v3 via go-pmtiles
     when needed (``pmtiles_convert_path``).
     """
-    if not input_geojsonseq.exists():
+    input_files: list[Path] | None = None
+    if isinstance(input_geojsonseq, list):
+        input_files = input_geojsonseq
+        for f in input_files:
+            if not f.exists():
+                raise FileNotFoundError(f"GeoJSONSeq input not found: {f}")
+    elif not input_geojsonseq.exists():
         raise FileNotFoundError(f"GeoJSONSeq input not found: {input_geojsonseq}")
 
     tippecanoe = _resolve_tippecanoe(tippecanoe_path)
@@ -439,7 +459,7 @@ def generate_pmtiles_geojsonseq(
 
     logger.info(
         "pmtiles_generating_stream",
-        input=str(input_geojsonseq),
+        input=input_files if input_files is not None else str(input_geojsonseq),
         output=str(output_pmtiles),
         min_zoom=min_zoom,
         max_zoom=max_zoom,
@@ -450,7 +470,11 @@ def generate_pmtiles_geojsonseq(
     if tmp_path.exists():
         tmp_path.unlink()
     try:
-        result = _run_tippecanoe_from_gzip(cmd, input_geojsonseq, timeout_seconds=timeout_seconds)
+        result = _run_tippecanoe_from_gzip(
+            cmd,
+            input_files if input_files is not None else input_geojsonseq,
+            timeout_seconds=timeout_seconds,
+        )
     except OSError as exc:
         raise TippecanoeNotFoundError(
             f"failed to execute tippecanoe at {tippecanoe}: {exc}"

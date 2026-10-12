@@ -64,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="kraj pipeline: SQLite destination override (default: <data_dir>/sqlite/parcels.sqlite)",
     )
     parser.add_argument(
+        "--shards",
+        type=int,
+        default=1,
+        help="kraj pipeline: number of parallel reader processes for stage 1 (default: 1)",
+    )
+    parser.add_argument(
         "--skip-download",
         action="store_true",
         help="Skip download stage (use existing files in raw_dir)",
@@ -205,6 +211,7 @@ def _main_kraj(args: argparse.Namespace, settings: Settings) -> int:
             skip_tiles=args.skip_pmtiles,
             skip_sqlite=args.skip_sqlite,
             dry_run=args.dry_run,
+            shards=args.shards,
         )
     except KeyboardInterrupt:
         logger.warning("kraj_pipeline_interrupted")
