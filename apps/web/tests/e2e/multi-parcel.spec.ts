@@ -118,13 +118,38 @@ test.describe('Multi-parcel project', () => {
   }) => {
     await ensureProject(page);
 
-    const container = page.locator('[data-testid="map-container"]').first();
-    const box = await container.boundingBox();
-    if (box === null) {
-      throw new Error('Mapa nie ma wymiarów');
-    }
+    // Deterministyczne kliki: projekcja punktów w planie <center> mapy
+    // (frakcje pikselowe viewportu były zależne od kamery i wchłaniały flake,
+    // klik podparł się na pozycji fitBounds z pierwszej działki).
+    const clickAt = async (lng: number, lat: number): Promise<void> => {
+      await page.evaluate(() => {
+        const map = (
+          window as unknown as Record<string, { jumpTo(opts: { zoom: number }): void } | undefined>
+        ).wycinkaMap;
+        map?.jumpTo({ zoom: 14 });
+      });
+      await waitForMapIdle(page);
+      const point = await page.evaluate(
+        ({ ln, lt }) => {
+          const map = (
+            window as unknown as Record<
+              string,
+              { project(lngLat: [number, number]): { x: number; y: number }; getContainer(): HTMLElement } | undefined
+            >
+          ).wycinkaMap;
+          if (map === undefined) {
+            throw new Error('map not ready');
+          }
+          const project = map.project([ln, lt]);
+          const rect = map.getContainer().getBoundingClientRect();
+          return { x: rect.left + project.x, y: rect.top + project.y };
+        },
+        { ln: lng, lt: lat },
+      );
+      await page.mouse.click(point.x, point.y);
+    };
 
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.25);
+    await clickAt(21.0065, 52.2325);
     const addNorth = page.getByTestId('add-parcel-to-project');
     await expect(addNorth).toBeVisible({ timeout: 10_000 });
     await addNorth.click();
@@ -137,12 +162,14 @@ test.describe('Multi-parcel project', () => {
       .first()
       .click();
     await expect(page.getByTestId('add-parcel-to-project')).toHaveCount(0);
-    await waitForMapIdle(page);
 
-    await page.mouse.click(box.x + (box.width / 4) * 3, box.y + box.height * 0.75);
+    await clickAt(21.0185, 52.229);
     const addSouth = page.getByTestId('add-parcel-to-project');
     await expect(addSouth).toBeVisible({ timeout: 10_000 });
     await addSouth.click();
+    await expect(page.getByRole('button', { name: /Usuń z projektu/i })).toBeVisible({
+      timeout: 5_000,
+    });
 
     await page.goto('/projects');
     await expect(page.getByTestId('active-project-panel')).toBeVisible();

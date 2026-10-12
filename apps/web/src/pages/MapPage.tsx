@@ -297,7 +297,7 @@ export default function MapPage(): JSX.Element {
 
         <aside
           data-testid="map-overlays"
-          className="pointer-events-none absolute left-4 top-4 max-w-[70vw] space-y-2 sm:max-w-sm"
+          className="pointer-events-none absolute left-4 top-4 max-w-[70vw] space-y-2 sm:top-[6.5rem] sm:max-w-sm"
         >
           {isLoading && (
             <Card className="pointer-events-auto">
