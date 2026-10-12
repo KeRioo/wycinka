@@ -412,25 +412,25 @@ export default function MapPage(): JSX.Element {
             }}
           />
         )}
-
-        <TreeListPanel
-          open={listPanelOpen}
-          onClose={() => {
-            setListPanelOpen(false);
-          }}
-          trees={trees}
-          onSelectTree={handleSelectTree}
-          onDeleteTree={handleDeleteTree}
-          onEditTree={handleEditTree}
-        />
-
-        <AddTreePanel
-          gpsPosition={position}
-          gpsLoading={gpsLoading}
-          gpsError={gpsError}
-          onRefreshGps={refresh}
-        />
       </div>
+
+      <TreeListPanel
+        open={listPanelOpen}
+        onClose={() => {
+          setListPanelOpen(false);
+        }}
+        trees={trees}
+        onSelectTree={handleSelectTree}
+        onDeleteTree={handleDeleteTree}
+        onEditTree={handleEditTree}
+      />
+
+      <AddTreePanel
+        gpsPosition={position}
+        gpsLoading={gpsLoading}
+        gpsError={gpsError}
+        onRefreshGps={refresh}
+      />
 
       {splitPanelKind !== null && (
         <div

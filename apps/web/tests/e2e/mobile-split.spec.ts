@@ -116,6 +116,25 @@ async function mapBox(page: import('@playwright/test').Page) {
   return page.getByTestId('map-container').boundingBox();
 }
 
+async function expectPanelSettled(
+  page: import('@playwright/test').Page,
+  testId: string,
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const first = await page.getByTestId(testId).boundingBox();
+      await page.waitForTimeout(120);
+      const second = await page.getByTestId(testId).boundingBox();
+      if (first === null || second === null) {
+        return null;
+      }
+      return Math.abs(first.y - second.y) < 0.5 && Math.abs(first.height - second.height) < 0.5
+        ? second.y
+        : null;
+    })
+    .toBeGreaterThan(0);
+}
+
 test.describe('Mobile — bottom-half split panels (§12.6)', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
@@ -135,19 +154,9 @@ test.describe('Mobile — bottom-half split panels (§12.6)', () => {
       throw new Error('viewport missing');
     }
     const minPanelTop = viewport.height * 0.48;
-    const mapTestId = page.getByTestId('map-container');
 
-    await expect
-      .poll(async () => {
-        const box = await addTreePanelBox(page);
-        const mb = await mapBox(page);
-        if (box === null || mb === null) {
-          return null;
-        }
-        return box.y < minPanelTop || mb.y + mb.height > box.y + 2 ? null : box.y + box.height;
-      })
-      .toBeGreaterThan(0);
     await expect(page.getByTestId('add-tree-panel')).toBeVisible();
+    await expectPanelSettled(page, 'add-tree-panel');
 
     const box = await addTreePanelBox(page);
     const mb = await mapBox(page);
@@ -159,7 +168,13 @@ test.describe('Mobile — bottom-half split panels (§12.6)', () => {
     expect(mb.y + mb.height).toBeLessThanOrEqual(box.y + 2);
     expect(mb.height).toBeGreaterThanOrEqual(200);
 
-    await expect(page.getByTestId('fab-add-tree')).toBeVisible();
+    await page.getByTestId('add-tree-drag-handle').tap();
+    await expect(page.getByTestId('add-tree-panel')).not.toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('fab-add-tree')).toBeVisible({ timeout: 10_000 });
+    await expect.poll(async () => {
+      const restored = await mapBox(page);
+      return restored === null ? 0 : restored.y + restored.height;
+    }).toBeGreaterThanOrEqual(viewport.height * 0.9);
   });
 
   test('should open the tree list in the lower half and restore the map when closed', async ({
@@ -179,22 +194,15 @@ test.describe('Mobile — bottom-half split panels (§12.6)', () => {
 
     const panel = page.getByTestId('tree-list-panel');
     await expect(panel).toBeVisible();
-    await expect
-      .poll(async () => {
-        const box = await panel.boundingBox();
-        const mb = await mapBox(page);
-        if (box === null || mb === null) {
-          return null;
-        }
-        return box.y < minPanelTop || mb.y + mb.height > box.y + 2 ? null : box.y;
-      })
-      .toBeGreaterThan(0);
+    await expectPanelSettled(page, 'tree-list-panel');
     const box = await panel.boundingBox();
     const mb = await mapBox(page);
     if (box === null || mb === null) {
       throw new Error('panel or map box missing');
     }
+    expect(box.y).toBeGreaterThanOrEqual(minPanelTop);
     expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+    expect(mb.y + mb.height).toBeLessThanOrEqual(box.y + 2);
 
     await page.getByTestId('tree-list-close').tap();
     await expect(panel).not.toBeVisible({ timeout: 5_000 });
