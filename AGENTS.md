@@ -366,7 +366,7 @@ git worktree remove ../wt-<modul> --force && git branch -d <branch>
 
 - **`vitest.config.ts` ma `maxThreads: 2`** — jsdom worker to ~2,3 GB RAM; przy 16 CPU bez capu vitest zrobił ~37 GB i zamroził system (incydent 2026-10-12). Nie podnoś limitu bez rozmowy z nadzorcą i wolnym RAM-em.
 - **Rule of one**: w jednym momencie max **jeden** run `npm test` w całym środowisku (worktree + nadzorca). Równoległe gate'y agentów = serializuj; nadzorca weryfikuje worktree jeden po drugim.
--coverage run jest droższy od zwykłego — uruchamiaj go raz na koniec pracy, nie przy każdym commicie.
+- Coverage run jest droższy od zwykłego — uruchamiaj go raz na koniec pracy, nie przy każdym commicie.
 
 ### 11.4 Artefakty i debug — repo czyste na końcu sesji
 
