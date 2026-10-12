@@ -2,6 +2,45 @@
 
 > Aktualizowane przez każdego subagenta po zakończeniu zadania.
 
+## Redesign v2 — faza A (szkielet nawigacji) — branch `feat/app-redesign-v2`, worktree `/root/wt-v2a` (2026-10-12)
+
+Agent: frontend fazy A. Gałąź bazowa: `feat/app-redesign-v2`. Wszystkie commity na tej gałęzi (od `2481e36`), nie mergowane — zostają nadzorcy. Zasada: **agenci dalszych faz NIE edytują plików fazy A poza interfejsami wskazanymi poniżej.**
+
+### Dostarczone
+
+- **Routing (`src/App.tsx`)**: `/` → **StartPage** (launcher), `/app` → **AppPage** (Header + MapPage 100% wysokości; cała app = mapa), `/projects` (bez linku w Headerze, trzeba z launcheru), `/settings` (ścieżka zostaje tymczasowo, nie linkowana — faza B zamienia na modal), `*` → 404. **Route `/map` usunięty.** Header NIE jest już globalny — wchodzi z AppPage; header bez zakładek.
+- **StartPage (`src/pages/StartPage.tsx`, §12.1)**: centralny panel (dark forest gradient + framer-motion), 3 opcje: [Nowy projekt] (dialog nazwy, domyślnie „Mój projekt", walidacja 1–100 znaków; po utworzeniu → `/app`), [Ostatnie projekty] — max 3 wiersze (nazwa / „Działka 251/1, 251/2 … • Otwock" / „N drzew • Edytowano <rel. czas>"), klik = wybór projektu → setActive + touchProject + `/app`, na końcu [Wszystkie projekty] → `/projects`, [Importuj z innego urządzenia] jako mały podrzędny link → modal z instrukcją (3 kroki PL) + re-use `BackupPanel` (eksport/import działa w modalu).
+- **AppPage (`src/pages/AppPage.tsx`, §12.2)**: brama — bez projektów → redirect `/`; reload bez aktywnego projektu auto-wybiera pierwszego (order: updatedAt desc po loadProjects — w praktyce najnowszy); renderuje Header + MapPage.
+- **Header (`src/components/layout/Header.tsx`)**: lewe logo + **project-chip** (nazwa aktywnego projektu, `project-chip`), prawe ☰ (`app-menu`, 44px, role menu) → „Ustawienia" (`menu-settings` → `openAppModal('settings')`), „Raporty" (`menu-reports` → `openAppModal('reports')`), „Wyjdź do startu" (`menu-exit` → navigate `/`). Zamykanie menu: klik poza / Escape. **SearchBox TERYT usunięty** (`SearchBox.tsx`, `lib/search.ts`, unit+e2e) — per §12.7.
+- **appStore (`src/stores/appStore.ts`, zustand)**: `appModal: 'settings' | 'reports' | null` + `openAppModal/closeAppModal` — **faza B podpiać modale ustawień/raportów pod to API** (Menu items już wywołują; modale jeszcze się nie renderują — po kliknięciu „Ustawienia"/„Raporty" app zostaje na /app).
+- **lib/format.ts**: `formatRelativeTime` („teraz" / „N min. temu" / „N godz. temu" / „wczoraj HH:MM" / DD.MM.YYYY HH:MM), `formatParcelsLine` (max 2 numery + „ …" + miejscowość z commune/region_name), `formatTreeCount` (drzewo/drzewa/drzew, wyjątki 12–14).
+- **Dexie (db/schema)**: `touchProject(id)` (updatedAt=now), `getProjectStats` (liczba drzew, numery działek po addedAt, miejscowość), `getRecentProjectsWithStats(limit)`. **projectStore**: `touchProject`, `getRecentProjectsWithStats` (unit).
+- **fix:** `ensureProjectsLoaded` czeka na *w locie trwające* `loadProjects` (subskrypcja stanu) — wcześniej AppPage × StrictMode race redirectował /app na `/` przy reload w stanie 'loading' (bug złapany przez E2E w fazie A).
+- **e2e fixture**: `tests/e2e/fixtures/minimal.pmtiles` — kontekstowy 129B syntetyk bywa odrzucany (varint/magic); zastąpiony pewnym `test_fixture_1.pmtiles` (468 B, protomaps/PMTiles js/test/data) — nadal commitowany (`-f`, §11.3). **Nie kasować.**
+- **e2e pełna migracja**: 10 plików — `trees`, `tree-list`, `mobile-panel`, `arrowpad-hold`, `snap-vertex`, `map-layer-perf`, `map`, `navigation` (przepisany na launcher flow), `multi-parcel`, `settings`. Wejście typu `create-first-project` (MapPage fallback) nieosiągalne — setup z launcheru (`tests/e2e/helpers.ts`: `openProjectViaLauncher(WithFab)`, `gotoStart`, `waitForMapIdle`).
+- **Gates (end-to-end)**: typecheck ✓ / lint --max-warnings=0 ✓ / unit **520/520** ✓ / coverage **93.47% lines / 90.41% funcs / 89.84% branches** (progi 80/80/75 ✓) / build ✓ (PWA precache 21) / **test:e2e 38/38 ✓ ×2 pełne uruchomienie** (0 flaky, 0 did-not-run).
+
+### Znane flaky/pre-existing (odnotowane, nie z fazy A)
+
+- `snap-vertex` „snap pending pin" padał równie na commit базowym (potwierdzone worktree od `a08a6bf`) — root-cause: **psuły fixture pmtiles 129B** (zajął nagłówek!), po wymianie na 468 B → stabilnie green.
+- `settings` backup roundtrip padał też na базою (karty projektów nazywały się domyślnie identycznie → `hasText 'Projekt 1'` pusty match); przepisany z rozpoznawalnymi nazwami (projekty tworzone przez dialog), po imporcie walidacja configu wprost w Dexie (pełne `page.goto('/settings')` resetuje active w store → auto-select zawsze najnowszy — decyzja architektoniczna do fazy B).
+- `multi-parcel` był flaky przy mocku '{}' pmtiles (mapa bez 'load', fitBounds nie działa); z działającym fixture 4× powtórki stabilnie.
+
+### BUILD-ORDER — kolejne fazy (dla delegacji nadzorcy)
+
+- **B1 — modale ustawień/raportów**: podpiąć pod `appStore.openAppModal('settings'|'reports')` (menu już działa). Ustawienia = edytory `SpeciesEditor`/`RangesEditor` (bez wydruków — §12.3). Raporty = modal generowania PDF (re-use `PdfExportDialog`, opcje per-projekt). Mobile: modal wyśrodkowany zaciemniony; panel GPS czerwony resurrects modal (§12.6). Uwaga: usuń/oznajm route `/settings` jako страницы — treść przeniesiona do modalu; nagłówek `max-h-[85vh]` + footer shrink-0 (§11.7).
+- **B2 — AddTreePanel kompresja (§12.4)**: Zapisz/Anuluj na GÓRZE panelu; arrow pad + centralny przycisk „odśwież pozycję do GPS" (wyszarzony gdy GPS nieaktywny — obecnie `useGeolocation` daje position/loading/error); zapamiętywanie ostatnich danych (gatunek/obwód — np. per projekt w Dexie + nowa wersja schematu wg §11.7); input obwodu z +/− po bokach. testidy: `panel-save`, `panel-cancel`, gps-refresh, circumference-minus/plus.
+- **B3 — kontrolki mapy (§12.5)**: attribution + scale w LEWYM GÓRNYM (maplibre AttributionControl compact=false position top-left; ScaleControl pod nim); zoom + compass większe (custom NavigationControl lub CSS); przycisk „skaluj mapę do 20 m" ( „czerwony" gdy GPS nieaktywny → klik = modal uprawnień + troubleshooting GPS); aktualna pozycja jako mały celownik (marquer DOM, pointer-events none, nie koliduje z edycją pinezki).
+- **B4 — mobilny split panel (§12.6)**: modale → wyśrodkowane (desktop) vs dolna połowa (mobile, mapa przesuwa się DO GÓRY — nie nakryta): dotyczy AddTreePanel (z B2) i TreeListPanel; przycisk „dodaj drzewo" (zielony, prawy) i „lista drzew" (lewy) w widoku mapy. Zawartość fazy A (Header chip, FAB, `add-tree-panel` bottom-sheet) pozostaje; B4 zmienia proporcje na 50/50 zamiast 62vh.
+
+### Statystyki fazy A
+
+Commity (atomowe): `2481e36` (format + **razem z nim usunięcie SearchBox/`lib/search.ts`/`HomePage`/unit+e2e search specs** — świadomie, netto 823 linii deletions w 6 plikach), `fc7bb96` (db/store helpers), `bc9ffd3` (appStore), `56c2067` (routing), `523587d` (Header + delete SearchBox załączony tam przez pierwszy `git rm`), `0557ea2` (unit StartPage/AppPage/App), `fc77677` (ProjectsPage nav na /app), `1bf652d` (fix ensureProjectsLoaded race), `54f75dc` (fixture 468B), `ddde553`+`88e6014` (e2e migracja drzew + navigation/map/multi-parcel/settings).
+
+Pliki src fazy A: `App.tsx`, `pages/StartPage.tsx`, `pages/AppPage.tsx`, `components/layout/Header.tsx`, `stores/appStore.ts`, `stores/projectStore.ts`, `db/schema.ts`, `lib/format.ts`, `pages/ProjectsPage.tsx` (nav links), `pages/SettingsPage.tsx` (kazany kotw. link), deleted: `HomePage.tsx`, `SearchBox.tsx`, `lib/search.ts`.
+
+---
+
 ## Frontend (rename projektu) — branch `feat/rename-project`, worktree `/root/wt-rename` (2026-10-09)
 
 Commity (atomowe): `6ec14b1` → `b7eee30` → `6cbacbe` → `587beb8` → `2f0dd2b` (+ `fix(e2e)` fixture).
