@@ -71,30 +71,45 @@ test.describe('Kontrolki mapy — bez GPS (odmowa dostępu)', () => {
     routeVersion(context);
   });
 
+  async function openMap(page: Page): Promise<void> {
+    await openProjectViaLauncher(page);
+    await expect(page.getByTestId('map-container')).toBeVisible({ timeout: 15_000 });
+  }
+
+  async function mapBox(page: Page): Promise<{ x: number; y: number; width: number; height: number }> {
+    const box = await page.getByTestId('map-container').boundingBox();
+    if (box === null) {
+      throw new Error('map container not in DOM');
+    }
+    return box;
+  }
+
   test('should place attribution above the scale bar in the top-left corner', async ({
     page,
   }) => {
-    await openProjectViaLauncher(page);
+    await openMap(page);
+    const container = await mapBox(page);
 
     const attribution = page.getByTestId('map-attribution');
     await expect(attribution).toBeVisible({ timeout: 15_000 });
     const attributionBox = await attribution.boundingBox();
     expect(attributionBox).not.toBeNull();
-    expect(attributionBox!.x).toBeLessThan(50);
-    expect(attributionBox!.y).toBeLessThan(50);
+    expect(attributionBox!.x - container.x).toBeLessThan(50);
+    expect(attributionBox!.y - container.y).toBeLessThan(50);
 
     const scale = page.getByTestId('map-scale');
     await expect(scale).toBeVisible();
     const scaleBox = await scale.boundingBox();
     expect(scaleBox).not.toBeNull();
-    expect(scaleBox!.x).toBeLessThan(50);
+    expect(scaleBox!.x - container.x).toBeLessThan(50);
     expect(scaleBox!.y).toBeGreaterThan(attributionBox!.y);
   });
 
   test('should render larger 44px zoom and compass controls at top-right', async ({
     page,
   }) => {
-    await openProjectViaLauncher(page);
+    await openMap(page);
+    const container = await mapBox(page);
 
     for (const testId of ['map-zoom-in', 'map-zoom-out', 'map-compass']) {
       const control = page.getByTestId(testId);
@@ -103,20 +118,22 @@ test.describe('Kontrolki mapy — bez GPS (odmowa dostępu)', () => {
       expect(box).not.toBeNull();
       expect(box!.width).toBeGreaterThanOrEqual(44);
       expect(box!.height).toBeGreaterThanOrEqual(44);
-      expect(box!.x).toBeGreaterThan(1000);
-      expect(box!.y).toBeLessThan(50);
+      // pionowa grupa (zoom-in / zoom-out / kompas) przylega do prawej krawędzi mapy
+      const offsetRight = container.x + container.width - (box!.x + box!.width);
+      expect(offsetRight).toBeLessThan(20);
+      expect(box!.y - container.y).toBeLessThan(160);
     }
   });
 
   test('should open the GPS troubleshooting modal when scale-to-20m is clicked without GPS', async ({
     page,
   }) => {
-    await openProjectViaLauncher(page);
+    await openMap(page);
 
     const button = page.getByTestId('map-scale-to-gps');
     await expect(button).toBeVisible({ timeout: 15_000 });
     await expect(button).toHaveAttribute('data-active', 'false');
-    expect(button.className).toContain('bg-red-600');
+    await expect(button).toHaveClass(/bg-red-600/);
 
     await button.click();
     await expect(page.getByTestId('gps-troubleshoot-modal')).toBeVisible();
@@ -182,7 +199,7 @@ test.describe('Kontrolki mapy — GPS dostępny', () => {
       (40075016.686 * Math.cos((GPS.lat * Math.PI) / 180)) / (256 * (20 / (0.6 * 720))),
     );
     await expect
-      .poll(getZoom(page), { timeout: 10_000, message: 'zoom po skalowaniu do 20 m' })
+      .poll(async () => getZoom(page), { timeout: 10_000, message: 'zoom po skalowaniu do 20 m' })
       .toBeCloseTo(expectedZoom, 1);
 
     const offset = await page.evaluate((coords) => {

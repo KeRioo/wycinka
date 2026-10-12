@@ -51,7 +51,7 @@ describe('MapControls', () => {
     render(<MapControls map={makeMapWithFlyTo().map} position={null} onRetryGps={vi.fn()} />);
     const button = screen.getByTestId('map-scale-to-gps');
     expect(button).toHaveAttribute('data-active', 'false');
-    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button.getAttribute('title')).toBe('Skaluj mapę do 20 m');
     expect(button.className).toContain('bg-red-600');
     expect(button).toHaveAttribute('aria-label', 'Skaluj mapę do 20 m');
   });
@@ -111,7 +111,6 @@ describe('MapControls', () => {
     render(<MapControls map={makeMapWithFlyTo().map} position={GPS_POSITION} onRetryGps={vi.fn()} />);
     const button = screen.getByTestId('map-scale-to-gps');
     expect(button).toHaveAttribute('data-active', 'true');
-    expect(button.getAttribute('aria-disabled')).toBe('false');
     expect(button.className).toContain('bg-white');
     expect(screen.queryByTestId('gps-troubleshoot-modal')).not.toBeInTheDocument();
   });

@@ -46,7 +46,6 @@ export default function MapControls({
         type="button"
         data-testid="map-scale-to-gps"
         data-active={gpsAvailable ? 'true' : 'false'}
-        aria-disabled={!gpsAvailable}
         title="Skaluj mapę do 20 m"
         aria-label="Skaluj mapę do 20 m"
         onClick={handleClick}
