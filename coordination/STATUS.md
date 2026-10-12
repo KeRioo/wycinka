@@ -2,6 +2,17 @@
 
 > Aktualizowane przez każdego subagenta po zakończeniu zadania.
 
+## ETL kraj — nocna wachta (nadzorca, 2026-10-12 wieczór)
+
+- **Run srv01**: stage 1 (16 shardów GeoJSONSeq) **DONE w ~14 min** — **38 180 615 działek**, 4,8 GB (38 841 997 rows parquet − ~661k odrzucone: braki TERYT/geometrii). Stage 3 SQLite R-tree w toku od 19:03 (`.kraj-parcels.sqlite.tmp` ~15,7 GB, +234 MB/min). Kontener `wycinka-etl-run-*`, container RAM 0,9/7,9 GiB, CPU ~1 rdzeń (single-writer load — to jest normalne).
+- **Incident: staging wpisany `rm` mid-run** (wcześniej): pracownicy 16-re-offload pisaly w usunięte inody → run zatruwany; naprawiony clean re-run. **Lekcja: NIE ruszać `.tmp` w staging podczas aktywnego runu.**
+- **parallel_tiles (stage 2 równolegle)**: nowy moduł `egib_sync/parallel_tiles.py` — split shardów per województwo (16 rozłącznych regionów, kodeki `voivodeship_code` z canonical dict), 4× tippecanoe współbieżnie (RAM-safe na 16 GB hosta), merge `tile-join`, konwersja go-pmtiles → v3. Watcher `egib-raw/etl-kraj-tiles-watch.sh` na srv01 czeka na `kraj_stage_sqlite_done` → kill konteneru przed jednoprątkowym tippecanoe → run równoległy.
+- **CI fix** (pushe 20:03): `parallel_tiles.py` miał runtime bugi wychwycone własnymi testami (`_POOLS` NameError po refactorze, `--base-zoom` None w cmd, cleanup pustych kubelków, flagi `-e/--attribution` usunięte na spójność z `pmtiles_gen`). Testy `tests/test_parallel_tiles.py` (15 szt.) → **pytest 239+2, coverage 85%**. CI znowu green (run `38301789749`). Image `wycinka-etl` na srv01 **rebuild z fixami** (watcher musi wystartować z nim, nie ze starym).
+- **Verifier nocny**: `egib-raw/etl-kraj-night-verify.sh` na srv01 — po tiles: magic `PMTiles`, rozmiar, tabele SQL, proste sample; raport → `egib-raw/etl-kraj-verify.txt`.
+- **Live-switch skrypt** przygotowany (NIE wykonany): `egib-raw/etl-kraj-live-switch.sh` — backup `.env` → swap `WYCINKA_DB_PATH`/`WYCINKA_PMTILES_PATH` na kraj → `up -d api web`. Warunek wykonania: verify raport MAGIC OK + sample queries.
+- **Sprzątanie**: 9 worktree'ów i gałęzi usunięte (v2-a..b4, etl-kraj, backend-fix, frontend-config, infra-auth) — wsyzstkie zmergowane/supersedowane do main. Repo tylko main.
+
+
 ## Redesign v2 — INTEGRACJA (nadzorca, 2026-10-12) — scalone, gates na całości
 
 - **Merges** do `feat/app-redesign-v2`: B1 (`1d10a40`), B2 (`4f4d0f1`), B3 (`057a192`), B4 (`50073cf`). Konflikty: `STATUS.md` (średnio) + przy B4 kodowe 4 pliki — rozwiązane: AddTreePanel → klasy B4 (`PANEL_MOBILE_HEIGHT_CLASS` `h-[50dvh] min-h-[300px]`), MapPage → struktura B4 (flex, `map-area`, spacer) z wstrzykniętymi B3 `MapControls`/`GpsCrosshair` do środka `map-area`, progi mobilne → wersja B4 (0.47–0.53).
