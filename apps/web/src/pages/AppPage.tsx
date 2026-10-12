@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import MapPage from '@/pages/MapPage';
 import Header from '@/components/layout/Header';
+import SettingsModal from '@/components/settings/SettingsModal';
+import ReportsModal from '@/components/pdf/ReportsModal';
 import { ensureProjectsLoaded, useProjectStore } from '@/stores/projectStore';
 
 export default function AppPage(): JSX.Element {
@@ -52,6 +54,8 @@ export default function AppPage(): JSX.Element {
       <main className="relative min-h-0 flex-1">
         <MapPage />
       </main>
+      <SettingsModal />
+      <ReportsModal />
     </div>
   );
 }
