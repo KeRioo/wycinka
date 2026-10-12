@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { FolderPlus, Inbox, Smartphone, TreePine } from 'lucide-react';
 import { Button, Card, CardContent } from '@/components/ui';import BackupPanel from '@/components/settings/BackupPanel';
 import { useProjectStore, type RecentProjectRow } from '@/stores/projectStore';
+import { useAppStore } from '@/stores/appStore';
 import {
   formatParcelsLine,
   formatRelativeTime,
@@ -48,6 +49,7 @@ export default function StartPage(): JSX.Element {
   const createAndActivate = useProjectStore((s) => s.createAndActivate);
   const touchProject = useProjectStore((s) => s.touchProject);
   const getRecentProjectsWithStats = useProjectStore((s) => s.getRecentProjectsWithStats);
+  const openAppModal = useAppStore((s) => s.openAppModal);
 
   const [recent, setRecent] = useState<RecentProjectRow[] | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -86,6 +88,8 @@ export default function StartPage(): JSX.Element {
     setCreating(true);
     try {
       await createAndActivate(name);
+      // §12.2: po utworzeniu projektu ze startu od razu modal ustawień
+      openAppModal('settings');
       navigate('/app');
     } finally {
       setCreating(false);
