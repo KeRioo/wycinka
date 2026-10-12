@@ -429,6 +429,7 @@ def load_parcels_stream(
         raise ValueError(f"batch_size must be positive, got {batch_size}")
     init_db(db_path)
     fetched = fetched_at or _now_iso()
+    _ensure_parent(db_path)
     conn = _connect(db_path)
     inserted = 0
     next_rtree_id = 1
@@ -450,6 +451,11 @@ def load_parcels_stream(
         if buffer:
             next_rtree_id += _flush_transaction(conn, buffer, next_rtree_id)
             inserted += len(buffer)
+    except BaseException:
+        conn.close()
+        for suffix in ("", "-wal", "-shm"):
+            Path(str(db_path) + suffix).unlink(missing_ok=True)
+        raise
     finally:
         conn.close()
     logger.info("sqlite_load_stream_done", db=str(db_path), rows=inserted, batch_size=batch_size)

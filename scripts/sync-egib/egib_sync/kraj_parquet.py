@@ -101,6 +101,23 @@ def _transform_callback(
     return _apply
 
 
+def reproject_to_wgs84(
+    geoms: list[BaseGeometry | None],
+    transformer: Transformer | None = None,
+) -> list[BaseGeometry | None]:
+    """Reproject EPSG:2180 geometries to EPSG:4326 (vectorized, None-safe)."""
+    tf = transformer if transformer is not None else make_transformer()
+    usable = [i for i, geom in enumerate(geoms) if geom is not None and not geom.is_empty]
+    if not usable:
+        return list(geoms)
+    transformed = shapely_transform(
+        np.asarray([geoms[i] for i in usable], dtype=object),
+        _transform_callback(tf),
+    )
+    by_index = dict(zip(usable, transformed, strict=True))
+    return [by_index.get(i) for i in range(len(geoms))]
+
+
 def _area_to_float(value: Decimal | float | int | None) -> float:
     if value is None:
         return 0.0
@@ -364,6 +381,7 @@ __all__ = [
     "make_transformer",
     "main",
     "read_sample_row_group",
+    "reproject_to_wgs84",
     "validate_schema",
 ]
 
