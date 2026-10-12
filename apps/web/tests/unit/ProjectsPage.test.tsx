@@ -76,7 +76,7 @@ describe('ProjectsPage', () => {
     expect(screen.getAllByTestId('project-card')).toHaveLength(2);
   });
 
-  it('should create new project and navigate to /map', async () => {
+  it('should create new project and navigate to /app', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -93,12 +93,12 @@ describe('ProjectsPage', () => {
     expect(screen.getByTestId('create-name-input')).toHaveValue('Mój pierwszy projekt');
     await user.click(screen.getByTestId('create-save'));
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/map');
+      expect(mockNavigate).toHaveBeenCalledWith('/app');
     });
     expect(useProjectStore.getState().projects.length).toBeGreaterThan(0);
   });
 
-  it('should select project and navigate to /map', async () => {
+  it('should select project and navigate to /app', async () => {
     const user = userEvent.setup();
     await useProjectStore.getState().createAndActivate('Leśny A');
     render(
@@ -110,7 +110,7 @@ describe('ProjectsPage', () => {
       expect(screen.getByText('Leśny A')).toBeInTheDocument();
     });
     await user.click(screen.getByTestId('project-open'));
-    expect(mockNavigate).toHaveBeenCalledWith('/map');
+    expect(mockNavigate).toHaveBeenCalledWith('/app');
     expect(useProjectStore.getState().activeProjectId).not.toBeNull();
   });
 
@@ -218,7 +218,7 @@ describe('ProjectsPage', () => {
     await waitFor(() => {
       expect(useProjectStore.getState().projects[0]?.name).toBe('Mój las 2026');
     });
-    expect(mockNavigate).toHaveBeenCalledWith('/map');
+    expect(mockNavigate).toHaveBeenCalledWith('/app');
   });
 
   it('should show create error for empty name', async () => {
