@@ -395,4 +395,68 @@ git worktree remove ../wt-<modul> --force && git branch -d <branch>
 - **Subagent** nie merguje do main — zostawia branch dla nadzorcy.
 - CI: po merge nadzorca odpala `gh run list` / `gh run view <id> --log-failed`; poprawki CI (`fix(ci):`) pushuj natychmiast — każdy push na main uruchamia run.
 
-**Powodzenia. Pisz czytelny kod, testuj wszystko, nie psuj innym buildów.**
+---
+
+## 12. Wymagania — Redesign v2 (2026-10-12) — ŹRÓDŁO PRAWDY SCOPU
+
+> Wymagania od użytkownika (stanowiące scope redesignu). **Każdy subagent pracujący nad redesignem MUSI przeczytać tę sekcję w całości.** Gałąź bazowa zmian: `feat/app-redesign-v2` (tworzy i merge'uje nadzorca). Searchbox TERYT — USUWAMY (użytkownik odrzucił funkcjonalność).
+
+### 12.1 Strona startowa (launcher) — nowa
+
+- Pierwsza strona aplikacji: ładne UI/UX, przejrzysty interfejs. **BEZ globalnych zakładek** — start to launcher/informer, nie pełna nawigacja.
+- Na środku panel z 3 opcjami:
+  1. **Nowy projekt** → modal o nazwę projektu.
+  2. **Ostatnie projekty** — lista **max 3**, przykładowy format wiersza:
+     `Nazwa projektu`
+     `Działka 251/1, 251/2 … (max 2; gdy więcej — wielokropek) • Otwock`
+     `12 drzew • Edytowano wczoraj 15:31` (format relatywny: „3 godziny temu" / „wczoraj 15:31" / `15.03.2025 12:16` gdy starsze)
+     Na końcu przycisk przekierowujący do **wszystkich projektów**.
+  3. **Importuj z innego urządzenia** — mały link (nie główny przycisk), otwiera modal z instrukcją przywracania kopii (backup JSON z innego urządzenia → import).
+- **Wybór projektu przechodzi do aplikacji**; wewnątrz aplikacji **NIE MA sposobu zmiany projektu** — aby zmienić, wychodzi się na stronę startową.
+
+### 12.2 Architektura widoku — cała aplikacja to mapa
+
+- Po wejściu do projektu: **cała aplikacja = widok mapy**; wszystkie dodatkowe funkcje to modale/panele otwierane z UI.
+- Po utworzeniu nowego projektu ze startu: **automatycznie otwiera się modal ustawień** projektu.
+- Powrót do ustawień: **popup menu z prawej strony headera** w aplikacji.
+- **Desktop**: modale wyśrodkowane (jak dotychczas).
+- **Mobile**: modale → **panele dzielące ekran na pół**: mapa na górze, panel na dole (obecne wyśrodkowanie na mobile nie działa — ten wzór to rozwiązuje).
+
+### 12.3 Ustawienia vs raporty (rozdzielenie)
+
+- Modal **ustawień** NIE ZAWIERA opcji generowania wydruków.
+- Opcje wydruków trafiają do **modalu generowania raportów**, przechowywane **per projekt**.
+- Modal raportów otwierany z popup menu w headerze.
+
+### 12.4 Panel „Dodaj drzewo" — kompresja
+
+- Panel maksymalnie skompresowany (maksimum widoku).
+- **Zapisz/Anuluj w GÓRNEJ części panelu**.
+- Na środku przycisków fine-tunigu pozycji (arrow pad): przycisk **odśwież pozycję drzewa do aktualnej lokalizacji GPS** — wyszarzony gdy GPS nieaktywny.
+- Panel **zapamiętuje ostatnio wprowadzone dane** (gatunek, obwód) jako domyślne dla kolejnego drzewa.
+- Input obwodu: **przyciski + i −** po lewej i prawej stronie.
+
+### 12.5 Mapa — kontrolki i pozycja
+
+- **Panel „OpenStreetMap contributors" w LEWYM GÓRNYM rogu**, **pod nim marker skali**.
+- Przyciski zoom i kompas **nieco większe**.
+- Nowy przycisk **„skaluj mapę do 20 m"** do aktualnej pozycji:
+  - nieaktywny i **czerwony** gdy GPS nieaktywny,
+  - kliknięcie czerwonego → **modal z uprawnieniami + szybki troubleshooting GPS**.
+- **Aktualna pozycja zawsze widoczna** — jako **mały celownik**, nieprzeszkadzający w edycji.
+
+### 12.6 Podsumowanie UX (mobile)
+
+- **MODAL wyśrodkowany, reszta lekko zaciemniona** (z popup menu w headerze): ustawienia; generowanie raportów; panel GPS (z przycisku na mapie gdy czerwony).
+- **PANEL w dolnej połowie ekranu (mapa przesuwa się DO GÓRY, nie nakryta)**: dodaj drzewo (zielony przycisk po prawej w widoku mapy); lista drzew (zwykły przycisk po lewej).
+
+### 12.7 Zasady pracy nad redesignem
+
+- Gałąź bazowa: `feat/app-redesign-v2` od `main`; fazę A buduje agent oddelegowany przez nadzorcę, kolejne fazy merge'uje nadzorca.
+- SearchBox TERYT usuwa **wyłącznie agent fazy A** (komponent, hookup w Headerze, `lib/search.ts`, testy unit+e2e) — agenci późniejszych faz tego nie dotykają.
+- Podzial plików per faza — patrz sekcja "Redesign v2" w `coordination/STATUS.md`.
+- §11 (worktree, formatowanie, testid, artefakty itd.) obowiązuje bez zmian.
+
+---
+
+**Powodzenia. Pisz czytelny kod, testuj wszystko, nie psuj cudzych buildów.**
