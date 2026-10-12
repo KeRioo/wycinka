@@ -3,21 +3,29 @@ import {
   addParcelToProjectDb,
   createProject,
   deleteProject as deleteProjectFromDb,
+  getRecentProjectsWithStats as getRecentProjectsWithStatsFromDb,
   listProjectParcels,
   removeParcelFromProjectDb,
   listProjects,
   MAX_PARCELS_PER_PROJECT,
+  touchProject as touchProjectInDb,
   updatePdfPrefs as updatePdfPrefsInDb,
   updateRangesConfig as updateRangesConfigInDb,
   updateSpeciesConfig as updateSpeciesConfigInDb,
   renameProject as renameProjectInDb,
   type Project,
+  type RecentProjectStats,
 } from '@/db/schema';
 import type { Parcel } from '@/services/api.types';
 
 export type ProjectLoadStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
 const PARCEL_LIMIT_MESSAGE = `Limit ${String(MAX_PARCELS_PER_PROJECT)} działek na projekt`;
+
+export interface RecentProjectRow {
+  project: Project;
+  stats: RecentProjectStats;
+}
 
 interface ProjectState {
   activeProjectId: string | null;
@@ -37,6 +45,8 @@ interface ProjectState {
   deleteProject: (id: string) => Promise<void>;
   savePdfPrefs: (id: string, prefs: Project['pdfPrefs']) => Promise<void>;
   renameProject: (id: string, name: string) => Promise<boolean>;
+  touchProject: (id: string) => Promise<void>;
+  getRecentProjectsWithStats: (limit: number) => Promise<RecentProjectRow[]>;
   saveSpeciesConfig: (id: string, species: Project['speciesConfig']) => Promise<void>;
   saveRangesConfig: (id: string, ranges: Project['rangesConfig']) => Promise<void>;
   refresh: () => Promise<void>;
@@ -159,6 +169,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projects: state.projects.map((p) => (p.id === result.project.id ? result.project : p)),
     }));
     return true;
+  },
+
+  touchProject: async (id) => {
+    const updated = await touchProjectInDb(id);
+    set((state) => ({
+      projects: state.projects.map((p) => (p.id === updated.id ? updated : p)),
+    }));
+  },
+
+  getRecentProjectsWithStats: async (limit) => {
+    const rows = await getRecentProjectsWithStatsFromDb(limit);
+    return rows.map(({ project, stats }) => ({ project, stats }));
   },
 
   savePdfPrefs: async (id, prefs) => {

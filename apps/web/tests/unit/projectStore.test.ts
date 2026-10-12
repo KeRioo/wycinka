@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { db } from '@/db/schema';
+import { addParcelToProjectDb, addTree, createProject, db } from '@/db/schema';
 import { useProjectStore } from '@/stores/projectStore';
 import type { Parcel } from '@/services/api.types';
 
@@ -317,5 +317,127 @@ describe('useProjectStore renameProject', () => {
     await useProjectStore.getState().renameProject(project.id, 'Zmieniony');
     expect(useProjectStore.getState().activeProjectId).toBe(project.id);
     expect(useProjectStore.getState().getActive()?.name).toBe('Zmieniony');
+  });
+});
+
+describe('useProjectStore touchProject', () => {
+  beforeEach(async () => {
+    db.delete();
+    await db.open();
+    useProjectStore.getState().clear();
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+  });
+
+  it('should persist a newer updatedAt in Dexie and in state', async () => {
+    const project = await useProjectStore.getState().createAndActivate('Las');
+    const before = await db.projects.get(project.id);
+    if (before === undefined) {
+      throw new Error('project missing');
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
+    await useProjectStore.getState().touchProject(project.id);
+    const stored = await db.projects.get(project.id);
+    expect(stored?.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+    expect(useProjectStore.getState().projects[0]?.updatedAt.getTime()).toBeGreaterThan(
+      before.updatedAt.getTime(),
+    );
+  });
+
+  it('should throw when project does not exist', async () => {
+    await expect(useProjectStore.getState().touchProject('ghost-id')).rejects.toThrow();
+  });
+});
+
+describe('useProjectStore getRecentProjectsWithStats', () => {
+  beforeEach(async () => {
+    db.delete();
+    await db.open();
+    useProjectStore.getState().clear();
+  });
+
+  afterEach(() => {
+    if (db.isOpen()) {
+      db.close();
+    }
+  });
+
+  async function seedParcel(projectId: string, teryt: string, number: string, commune: string) {
+    await addParcelToProjectDb(projectId, {
+      ...parcelFixture,
+      id: teryt,
+      teryt,
+      number,
+      commune,
+    });
+  }
+
+  const parcelFixture: Parcel = {
+    id: '141201_1.0001.6509',
+    teryt: '141201_1.0001.6509',
+    number: '6509',
+    voivodeship: 'mazowieckie',
+    county: 'Warszawa',
+    commune: 'Śródmieście',
+    region: '0001',
+    region_name: 'Obręb 0001',
+    area_m2: 1234.56,
+    land_use: 'Ls',
+    geom: {
+      type: 'Polygon' as const,
+      coordinates: [[[21.006, 52.231], [21.007, 52.231], [21.007, 52.232], [21.006, 52.231]]],
+    },
+    bbox: [21.006, 52.231, 21.007, 52.232] as const,
+    centroid: [21.0065, 52.2315] as const,
+    fetched_at: '2026-09-29T03:00:00Z',
+    voivodeship_code: '14',
+    county_code: '12',
+    commune_code: '01',
+    datasource: 'uldk',
+  };
+
+  it('should return rows sorted by updatedAt descending with tree and parcel stats', async () => {
+    const a = await createProject({ name: 'Starszy' });
+    const b = await createProject({ name: 'Nowszy' });
+    const t1 = new Date(2025, 0, 1, 10, 0);
+    const t2 = new Date(2025, 0, 2, 10, 0);
+    await db.projects.put({ ...a, updatedAt: t1 });
+    await db.projects.put({ ...b, updatedAt: t2 });
+    await addTree({ projectId: a.id, lat: 52.23, lng: 21.01, species: 'Dąb', circumference: 85, capturedAt: t1 });
+    await addTree({ projectId: a.id, lat: 52.24, lng: 21.02, species: 'Buk', circumference: 60, capturedAt: t1 });
+    await seedParcel(b.id, '141201_1.0001.6509', '6509', 'Śródmieście');
+
+    const rows = await useProjectStore.getState().getRecentProjectsWithStats(3);
+
+    expect(rows.map((row) => row.project.name)).toEqual(['Nowszy', 'Starszy']);
+    const starszy = rows.find((row) => row.project.name === 'Starszy');
+    expect(starszy?.stats.treeCount).toBe(2);
+    expect(starszy?.stats.parcelNumbers).toEqual([]);
+    expect(starszy?.stats.locality).toBeNull();
+    const nowszy = rows.find((row) => row.project.name === 'Nowszy');
+    expect(nowszy?.stats.treeCount).toBe(0);
+    expect(nowszy?.stats.parcelNumbers).toEqual(['6509']);
+    expect(nowszy?.stats.locality).toBe('Śródmieście');
+  });
+
+  it('should limit results to the requested count', async () => {
+    const a = await createProject({ name: 'A' });
+    const b = await createProject({ name: 'B' });
+    const c = await createProject({ name: 'C' });
+    const d = await createProject({ name: 'D' });
+    await db.projects.put({ ...a, updatedAt: new Date(2025, 0, 1) });
+    await db.projects.put({ ...b, updatedAt: new Date(2025, 0, 2) });
+    await db.projects.put({ ...c, updatedAt: new Date(2025, 0, 3) });
+    await db.projects.put({ ...d, updatedAt: new Date(2025, 0, 4) });
+
+    const rows = await useProjectStore.getState().getRecentProjectsWithStats(3);
+
+    expect(rows.map((row) => row.project.name)).toEqual(['D', 'C', 'B']);
   });
 });
