@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS sync_meta (
 INDEXES_SQL = """
 CREATE INDEX IF NOT EXISTS idx_parcels_geometry_gist ON parcels USING gist (geometry);
 CREATE INDEX IF NOT EXISTS idx_parcels_teryt ON parcels (teryt);
+-- LIKE-prefix search: planner nie używa btree z default locale dla "prefix%" — C collation required
+CREATE INDEX IF NOT EXISTS idx_parcels_teryt_c ON parcels (teryt COLLATE "C");
 CREATE INDEX IF NOT EXISTS idx_parcels_voivodeship ON parcels (voivodeship_code);
 CREATE INDEX IF NOT EXISTS idx_parcels_county ON parcels (county_code);
 CREATE INDEX IF NOT EXISTS idx_parcels_commune ON parcels (commune_code);
