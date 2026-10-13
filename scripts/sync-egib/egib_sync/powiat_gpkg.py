@@ -75,7 +75,7 @@ def parse_teryt_units(id_dzialki: str) -> tuple[str, str, str, str, str]:
 
     Returns empty strings when the identifier does not follow TERYT layout.
     """
-    match = re.fullmatch(r"(\d{2})(\d{2})(\d{2})_([1-5])\.(\d{4})\.(\S+)", id_dzialki)
+    match = re.fullmatch(r"(\d{2})(\d{2})(\d{2})_([1-9])\.(\d{4})\.(\S+)", id_dzialki)
     if not match:
         return "", "", "", "", ""
     voiv, county_raw, commune_raw, _, region, number = match.groups()

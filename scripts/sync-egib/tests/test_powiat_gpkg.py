@@ -47,6 +47,16 @@ def test_parse_teryt_units_when_full_teryt_then_split_fields():
     assert (voiv, county, commune, region, number) == ("14", "17", "01", "0022", "2/2")
 
 
+def test_parse_teryt_units_when_rodzaj_9_krakow_then_parses():
+    voiv, county, commune, region, number = parse_teryt_units("126104_9.0084.255/20")
+    assert (voiv, county, commune, region, number) == ("12", "61", "04", "0084", "255/20")
+
+
+def test_parse_teryt_units_when_suffix_9_krakow_missing_then_parses():
+    voiv, _, _, _, _ = parse_teryt_units("126101_9.0001.5")
+    assert voiv == "12"
+
+
 def test_parse_teryt_units_when_invalid_then_empty_strings():
     assert parse_teryt_units("JAN") == ("", "", "", "", "")
 
