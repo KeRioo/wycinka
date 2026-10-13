@@ -70,7 +70,9 @@ def storage(monkeypatch: pytest.MonkeyPatch) -> PostgresDatabase:
 
 @pytest.mark.asyncio
 class TestPostgresDatabaseQueries:
-    async def test_point_candidates_uses_st_makepoint_and_limit(self, storage: PostgresDatabase) -> None:
+    async def test_point_candidates_uses_st_makepoint_and_limit(
+        self, storage: PostgresDatabase
+    ) -> None:
         conn = (await storage.connect())._conn
         conn.store["rows"] = [{"teryt": "141201_1.0001.6509"}]
         rows = await storage.get_point_candidates(52.23, 21.01)
@@ -88,9 +90,13 @@ class TestPostgresDatabaseQueries:
         assert rows
         sql = conn.store["last_sql"]
         assert "LIKE $1" in sql
+        assert "geom_wkt" not in sql and "geometry" not in sql
+        assert "ORDER BY p.teryt" in sql
         # the % suffix is appended in the adapter; validate via the fetch args path
 
-    async def test_get_many_by_teryt_when_empty_then_no_fetch(self, storage: PostgresDatabase) -> None:
+    async def test_get_many_by_teryt_when_empty_then_no_fetch(
+        self, storage: PostgresDatabase
+    ) -> None:
         rows = await storage.get_many_by_teryt([])
         assert rows == []
 

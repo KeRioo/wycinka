@@ -42,6 +42,11 @@ _FIELDS = (
 
 _SELECT_COLUMNS = "p." + ", p.".join(_FIELDS)
 
+_SEARCH_PREFIX_SQL = (
+    "SELECT p.id, p.teryt, p.commune, p.region, p.region_name FROM parcels p "
+    "WHERE p.teryt LIKE $1 ORDER BY p.teryt LIMIT $2"
+)
+
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS parcels (
   id text PRIMARY KEY,
@@ -93,10 +98,6 @@ _POINT_CANDIDATES_SQL = (
 )
 
 _SELECT_BY_TERYT_SQL = f"SELECT {_SELECT_COLUMNS} FROM parcels p WHERE p.teryt = $1"
-
-_SEARCH_PREFIX_SQL = (
-    f"SELECT {_SELECT_COLUMNS} FROM parcels p WHERE p.teryt LIKE $1 ORDER BY p.teryt LIMIT $2"
-)
 
 
 def _to_os_error(exc: Exception, *, context: str) -> OSError:
