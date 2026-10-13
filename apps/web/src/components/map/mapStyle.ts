@@ -1,7 +1,11 @@
 import type maplibregl from 'maplibre-gl';
 
-export const DZIALKI_MIN_ZOOM = 15;
-export const DZIALKI_FILL_MIN_ZOOM = 17;
+// Działki: PMTiles kraju ma tile od z12 (tippecanoe --minimum-zoom=12).
+// Linie od z12 (poziom miasto/obręb), wypełnienie od z13 — granice widoczne
+// zanim użytkownik przybliży na skrajny zoom (38,8M działek: niższy minzoom
+// = wyraźny koszt renderu w telefonie).
+export const DZIALKI_MIN_ZOOM = 12;
+export const DZIALKI_FILL_MIN_ZOOM = 13;
 
 const BASE_STYLE: maplibregl.StyleSpecification = {
   version: 8,
