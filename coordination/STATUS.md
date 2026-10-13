@@ -992,3 +992,33 @@ Agent: frontend B3. Bazuje na faza A (`feat/app-redesign-v2`). Nie mergować —
 - **`docker run -d > file` nie zbiera stdout kontenera** — redirect łapie tylko Container ID; logi pracy trzeba brać z `docker logs` (albo `docker logs -f`).
 - **Po-COPY `count(*)` per worker** (loader w parallel mode) — 9 równoległych seq-scanów na 38M spowalniało exit workerów ~70 min. Do poprawy: worker mode pomija table_count; finalny verify liczy raz.
 - Docker compose healthcheck "unhealthy" na etl-run: cosmetic (cron-based probe), nie wpływa na działające joby pipeline — ignorować.
+
+---
+
+## 2026-10-13 (wieczór) — country PMTiles LIVE + full today summary (supervisor)
+
+### Kraj PMTiles: produkcyjnie gotowy (21:57)
+- Stage 2: 16 województw × tippecanoe (`--minimum-zoom=12 --base-zoom=15 --maximum-zoom=16 --drop-densest-as-needed`, tiny_polygons drops na z15/16) → tile-join → go-pmtiles **v3, 11 199 719 329 B** (`/app/data/pmtiles/dzialki-kraj.pmtiles`), magic `PMTiles` ✓, bounds 14.12–24.14E / 49.0–54.8N, 2,96M addressed tiles.
+- `docker-compose.yml`: `WYCINKA_PMTILES_PATH` przez `${WYCINKA_PMTILES_PATH:-/app/data/pmtiles/dzialki.pmtiles}` (commit cb6a82d); `.env` na srv01 wskazuje `dzialki-kraj.pmtiles`; stary otwocki (112 MB) zostaje na dysku jako fallback.
+- Verify w przeglądarce: Range → 206 z originu strony (magic PMTiles); klik Śródmieście → działka `146510_8.0502.2/2` (Źródło: geoportal-parquet-kraj); klik Kąty Węgierskie → `140803_2.0008.594` — pełny round-trip tile→API→PostGIS ✓. Konsola: 0 błędów.
+- **Decyzja użytkownika (UPWM): minzoom zostaje 12** — na widoku całego kraju działki celowo nie renderują się (38,8M działek). Rebuild od z10 odrzucony.
+
+### Zdjęty basic auth (decyzja użytkownika)
+- `infra/caddy/Caddyfile`: snippet `(auth_production)` → pusty; entrypoint renderuje i caddy restartuje clean (commit 85a9eaf). `https://wycinka.app/{,/api/*,/health}` → **200 bez credentials**.
+- Site publicznie dostępny: dane projektów w przeglądarce (Dexie), API read-only — świadomie zaakceptowane przez użytkownika. Opcja na przyszłość: Cloudflare Access.
+
+### Full-day timeline (kraj)
+- 08:54 sqlite_done (stage 3, 38 841 461 rows) → watcher → parallel_tiles (12:23).
+- 12:24–13:39 **PG parallel COPY** (8 workers × disjoint shardy; ~20–25k rows/s) → 13:39–14:15 indeksy (`--pg-only-indexes`); **prev busy release**: per-worker `count(*)` po COPY powodował ~70 min ogon.
+- 14:16 verify PG: count dokładnie 38 841 461, geometry IS NULL=0, GIST 27–44 ms (ST_Intersects).
+- 14:17 **live-switch API → PostGIS** (`WYCINKA_DB_URL` w .env; backup `.env.bak-pre-live-switch`).
+- 14:30 hotfix search (13 759→83 ms): narrow SELECT (bez geom_wkt/geometry TOAST) + `idx_parcels_teryt_c` (COLLATE "C", ważne dla non-C datcollate) — a029877.
+- 14:37 fix frontend overflow: `map-area` overflow-hidden (ping-ring FAB wbijał scrollbar co 1 s na desktopie) — 6988956.
+- 15:50 parallel_tiles_done → 21:50 convert verify + switch PMTiles na kraju (cb6a82d).
+- 21:40 zdjęty basic auth (85a9eaf).
+
+### Pozostałości / notatki
+- Staging shards (`kraj_dzialki.geojsonl.gz.shard*`, 4,7 GB) na dysku — backup stage 1; decyzja o kasacji po tygodniu.
+- `kraj-parcels.sqlite` (stage 3) zostaje — fallback powrotu na SQLite istnieje (usunięcie WYCINKA_DB_URL z .env + restart api).
+- E2E: `httpCredentials` w konfigach i helperach — teraz zbędne (auth off); można wyjąć przy następnym touch e2e.
+- Lessons (§11 kandydaci): logi przy `docker run -d` tylko przez `docker logs`; `count(*)` per-worker po COPY do wyjołowii w parallel mode; caddy `caddy validate` na RAW Caddyfile daje fałszywe error (entrypoint renderuje snippety — weryfikacja dopiero przez restart + curl).
