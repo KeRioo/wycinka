@@ -281,7 +281,7 @@ export default function MapPage(): JSX.Element {
 
   return (
     <div className="relative flex h-full w-full flex-col">
-      <div data-testid="map-area" className="relative min-h-0 flex-1">
+      <div data-testid="map-area" className="relative min-h-0 flex-1 overflow-hidden">
         <MapClickHandler
           onMapReady={handleMapReady}
           treeLayer={treeLayer}
