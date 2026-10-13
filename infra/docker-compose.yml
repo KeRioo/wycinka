@@ -40,7 +40,7 @@ services:
       WYCINKA_DB_PATH: /app/data/sqlite/parcels.sqlite
       # PostGIS backend (priorytet gdy ustawiony — WYCINKA_DB_URL nadpisuje sqlite):
       WYCINKA_DB_URL: ${WYCINKA_DB_URL:-}
-      WYCINKA_PMTILES_PATH: /app/data/pmtiles/dzialki.pmtiles
+      WYCINKA_PMTILES_PATH: ${WYCINKA_PMTILES_PATH:-/app/data/pmtiles/dzialki.pmtiles}
       WYCINKA_SYNC_COMMAND: ${WYCINKA_SYNC_COMMAND:-python -m egib_sync --powiat ${ETL_POWIAT:-}}
     volumes:
       - api-data:/app/data
