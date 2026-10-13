@@ -1022,3 +1022,8 @@ Agent: frontend B3. Bazuje na faza A (`feat/app-redesign-v2`). Nie mergować —
 - `kraj-parcels.sqlite` (stage 3) zostaje — fallback powrotu na SQLite istnieje (usunięcie WYCINKA_DB_URL z .env + restart api).
 - E2E: `httpCredentials` w konfigach i helperach — teraz zbędne (auth off); można wyjąć przy następnym touch e2e.
 - Lessons (§11 kandydaci): logi przy `docker run -d` tylko przez `docker logs`; `count(*)` per-worker po COPY do wyjołowii w parallel mode; caddy `caddy validate` na RAW Caddyfile daje fałszywe error (entrypoint renderuje snippety — weryfikacja dopiero przez restart + curl).
+
+### Doptete (22:40) — frontend minzoom dzialek 15/17 -> 12/13
+- Uzbytek nie widział granic działek na kraju: `app/web mapStyle.ts` constants tuned pod otwocki county zostały — PMTiles kraj ma tile od z12, frontend zacinał warstwy od z15 (linie)/z17 (fill).
+- Fix: `DZIALKI_MIN_ZOOM=12`, `DZIALKI_FILL_MIN_ZOOM=13` (commit 947e1d8, bundle `index-D_e5Y0T0.js`). Verify w przeglądarce: Warszawa z~13.5 (scale 500 m) — działki widać wszędzie; unit 5 suit 56/56.
+- Od teraz: zoom ≤11 = tylko OSM (celowo), z12+ = linie działek, z13+ = wypełnienie (klik działa przez cały stack niezależnie od zoom).
