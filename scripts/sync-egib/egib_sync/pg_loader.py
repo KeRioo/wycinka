@@ -1,11 +1,11 @@
-"""PostGIS loader — COPY streaming of staged GeoJSONSeq into PostgreSQL.
+"""PostGIS loader — text COPY streaming of staged GeoJSONSeq into PostgreSQL.
 
 Design (kraj dataset, ~38.8M rows):
   * rows stream from already-staged gzip GeoJSONSeq shards (no parquet re-read),
-  * asyncpg binary COPY (``copy_records_to_table``) inserts scalar columns and
-    ``geometry`` directly (shapely -> WKB bytes); ``geom_wkt`` keeps the textual
-    form used by the API layer,
-  * GIST/BTREE indexes are created after COPY (no index maintenance over load),
+  * asyncpg text COPY (``copy_to_table``) — geometry column accepts WKT text,
+    so shapely serializes once (wkt) and no binary encoder is needed
+    (asyncpg has none for the PostGIS ``geometry`` type),
+  * GIST/BTREE indexes are created after COPY (no index maintenance under load),
   * ``sync_meta`` gets etag + last_sync for the backend ``/api/v1/version``.
 """
 
@@ -22,6 +22,7 @@ import structlog
 
 if TYPE_CHECKING:
     import asyncpg
+
     from shapely.geometry.base import BaseGeometry
 
 logger = structlog.get_logger(__name__)
@@ -95,51 +96,8 @@ COPY_COLUMNS: tuple[str, ...] = (
     "datasource",
 )
 
-PROGRESS_STEP = 250_000
-
-
-def _fmt_rate(rows: int, seconds: float) -> str:
-    if seconds <= 0:
-        return "n/a"
-    rate = rows / seconds
-    return f"{rate:,.0f} rows/s"
-
-
-class _RowCounter:
-    """Wraps an async record iterator, counting rows for logs/returns."""
-
-    def __init__(self, *, expected_rows: int | None = None) -> None:
-        self.count = 0
-        self._started: float | None = None
-        self._expected = expected_rows
-
-    async def wrap(self, records: AsyncIterator[tuple[Any, ...]]) -> AsyncIterator[tuple[Any, ...]]:
-        import time
-
-        self._started = time.monotonic()
-        async for record in records:
-            self.count += 1
-            if self.count % PROGRESS_STEP == 0:
-                elapsed = time.monotonic() - self._started
-                payload: dict[str, Any] = {
-                    "rows": self.count,
-                    "seconds": int(elapsed),
-                    "rate": _fmt_rate(self.count, elapsed),
-                }
-                if self._expected and self._expected > 0:
-                    pct = min(100.0, 100.0 * self.count / self._expected)
-                    eta_s = int((self._expected - self.count) * elapsed / max(self.count, 1))
-                    payload["pct"] = round(pct, 1)
-                    payload["eta_min"] = eta_s // 60
-                logger.info("pg_loader_progress", **payload)
-            yield record
-        elapsed = time.monotonic() - self._started
-        logger.info(
-            "pg_loader_copy_rows",
-            rows=self.count,
-            seconds=int(elapsed),
-            rate=_fmt_rate(self.count, elapsed),
-        )
+COPY_CHUNK_BYTES = 1 << 20
+PROGRESS_STEP = 500_000
 
 
 class PgLoaderError(RuntimeError):
@@ -186,7 +144,7 @@ def row_from_feature(
         _finite_or_zero(props.get("area_m2", 0.0)),
         _nullable_str(props.get("land_use")),
         geom.wkt,
-        _to_wkb(geom),
+        geom.wkt,
         float(centroid.x),
         float(centroid.y),
         float(minx),
@@ -196,12 +154,6 @@ def row_from_feature(
         fetched_at,
         datasource,
     )
-
-
-def _to_wkb(geom: BaseGeometry) -> bytes:
-    import shapely
-
-    return bytes(shapely.to_wkb(geom))
 
 
 def _nullable_str(value: Any) -> str | None:
@@ -218,26 +170,96 @@ def _finite_or_zero(value: Any) -> float:
     return area
 
 
-async def iter_shard_rows(
+def copy_line(row: Sequence[Any]) -> bytes:
+    """Encode one COPY text row (tab-delimited, \\N for NULL)."""
+    parts: list[str] = []
+    for value in row:
+        if value is None:
+            parts.append("\\N")
+        else:
+            text = str(value)
+            parts.append(text.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n"))
+    return ("\t".join(parts) + "\n").encode()
+
+
+def _fmt_rate(rows: int, seconds: float) -> str:
+    if seconds <= 0:
+        return "n/a"
+    return f"{rows / seconds:,.0f} rows/s"
+
+
+class ProgressMeter:
+    """Counts COPY rows; logs rate/ETA into the container log."""
+
+    def __init__(self, expected_rows: int | None = None) -> None:
+        self.count = 0
+        self._started: float | None = None
+        self._expected = expected_rows
+
+    async def wrap(self, records: AsyncIterator[bytes]) -> AsyncIterator[bytes]:
+        batch: list[bytes] = []
+        size = 0
+        self._started = time.monotonic()
+        async for line in records:
+            self.count += 1
+            batch.append(line)
+            size += len(line)
+            if self.count % PROGRESS_STEP == 0:
+                self._log_progress()
+            if size >= COPY_CHUNK_BYTES:
+                yield b"".join(batch)
+                batch.clear()
+                size = 0
+        if batch:
+            yield b"".join(batch)
+        elapsed = time.monotonic() - (self._started or time.monotonic())
+        logger.info(
+            "pg_loader_copy_rows",
+            rows=self.count,
+            seconds=int(elapsed),
+            rate=_fmt_rate(self.count, elapsed),
+        )
+
+    def _log_progress(self) -> None:
+        elapsed = time.monotonic() - (self._started or time.monotonic())
+        payload: dict[str, Any] = {
+            "rows": self.count,
+            "seconds": int(elapsed),
+            "rate": _fmt_rate(self.count, elapsed),
+        }
+        if self._expected and self._expected > 0 and self.count > 0:
+            payload["pct"] = round(min(100.0, 100.0 * self.count / self._expected), 1)
+            payload["eta_min"] = int((self._expected - self.count) * elapsed / self.count // 60)
+        logger.info("pg_loader_progress", **payload)
+
+
+async def iter_copy_lines(
     shard_paths: Sequence[Path],
     *,
+    expected_rows: int | None,
     fetched_at: str,
     datasource: str,
-) -> AsyncIterator[tuple[Any, ...]]:
-    """Async generator of COPY-ready tuples from the staged gzip shards."""
+) -> AsyncIterator[bytes]:
+    """Async generator: staged gzip shards -> encoded COPY lines."""
     for shard in shard_paths:
         with gzip.open(shard, "rt", encoding="utf-8") as fh:
-            count = 0
+            read = 0
             for raw_line in fh:
                 line = raw_line.strip()
                 if not line:
                     continue
-                count += 1
-                feature = json.loads(line)
-                row = row_from_feature(feature, fetched_at=fetched_at, datasource=datasource)
+                read += 1
+                row = row_from_feature(
+                    json.loads(line), fetched_at=fetched_at, datasource=datasource
+                )
                 if row is not None:
-                    yield row
-        logger.info("pg_loader_shard_streamed", shard=shard.name, features=count)
+                    yield copy_line(row)
+            logger.info(
+                "pg_loader_shard_streamed",
+                shard=shard.name,
+                features=read,
+                expected_total=expected_rows,
+            )
 
 
 async def _set_sync_meta(conn: asyncpg.Connection, key: str, value: str, at_iso: str) -> None:
@@ -263,11 +285,7 @@ async def load_from_shards(
     etag: str | None = None,
     expected_rows: int | None = None,
 ) -> int:
-    """Stream staged shards into PostGIS parcels; returns the copied row count.
-
-    ``expected_rows`` enables ``pct``/``eta_min`` in the progress logs (pass the
-    stage-1 count, e.g. 38_841_461) — without it only ``rows``/``rate`` are logged.
-    """
+    """Stream staged shards into the PostGIS parcels table; returns copied rows."""
     if not shard_paths:
         raise PgLoaderError("no shard files provided")
 
@@ -275,18 +293,24 @@ async def load_from_shards(
 
     pool: asyncpg.Pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=2)
     now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    meter = _RowCounter(expected_rows=expected_rows)
+    meter = ProgressMeter(expected_rows=expected_rows)
     try:
         async with pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
-        async with pool.acquire() as conn, conn.transaction():
-            await conn.copy_records_to_table(
+        async with pool.acquire() as conn:
+            lines = iter_copy_lines(
+                shard_paths,
+                expected_rows=expected_rows,
+                fetched_at=now_iso,
+                datasource=datasource,
+            )
+            status = await conn.copy_to_table(
                 "parcels",
                 columns=list(COPY_COLUMNS),
-                records=meter.wrap(
-                    iter_shard_rows(shard_paths, fetched_at=now_iso, datasource=datasource)
-                ),
+                source=meter.wrap(lines),
+                format="text",
             )
+            logger.info("pg_loader_copy_status", status=str(status))
         copied = meter.count
         async with pool.acquire() as conn:
             await conn.execute(INDEXES_SQL)

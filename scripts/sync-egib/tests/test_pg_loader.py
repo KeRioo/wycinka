@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,8 @@ from egib_sync.pg_loader import (
     INDEXES_SQL,
     SCHEMA_SQL,
     PgLoaderError,
-    iter_shard_rows,
+    copy_line,
+    iter_copy_lines,
     load_from_shards,
     row_from_feature,
 )
@@ -52,11 +54,12 @@ class TestRowFromFeature:
         row = row_from_feature(_feature(), fetched_at="2026-10-13T10:00:00Z", datasource="parq")
         assert len(row) == len(COPY_COLUMNS)
         mapping = dict(zip(COPY_COLUMNS, row, strict=True))
+        assert isinstance(mapping["geometry"], str)  # WKT text for COPY
+        assert mapping["geometry"].startswith("POLYGON")
         assert mapping["id"] == "126104_9.0084.255/20"
         assert mapping["voivodeship_code"] == "12"
         assert mapping["area_m2"] == pytest.approx(1250.5)
         assert mapping["geom_wkt"].startswith("POLYGON ((")
-        assert isinstance(mapping["geometry"], bytes)
         assert mapping["bbox_max_lng"] == pytest.approx(19.36)
         assert mapping["centroid_lat"] == pytest.approx(52.195)
 
@@ -78,8 +81,8 @@ class TestRowFromFeature:
         assert mapping["area_m2"] == 0.0
 
 
-class TestIterShardRows:
-    async def test_streams_rows_and_skips_none(self, tmp_path: Path) -> None:
+class TestIterCopyLines:
+    async def test_streams_lines_and_skips_null_geometry(self, tmp_path: Path) -> None:
         shard = tmp_path / "kraj_dzialki.geojsonl.gz.shard0"
         with gzip.open(shard, "wt", encoding="utf-8") as fh:
             for feature in (
@@ -89,14 +92,40 @@ class TestIterShardRows:
             ):
                 fh.write(json.dumps(feature) + "\n")
 
-        rows = [
-            row
-            async for row in iter_shard_rows(
-                [shard], fetched_at="2026-10-13T10:00:00Z", datasource="parq"
+        lines = [
+            line
+            async for line in iter_copy_lines(
+                [shard],
+                expected_rows=38_841_461,
+                fetched_at="2026-10-13T10:00:00Z",
+                datasource="parq",
             )
         ]
-        assert len(rows) == 2
-        assert rows[0][0] == "126104_9.0084.255/20"
+        assert len(lines) == 2
+        assert lines[0].startswith(
+            b"126104_9.0084.255/20\t126104_9.0084.255/20\t255/20\tma\xc5\x82opolskie\n"
+        ) or lines[0].startswith(b"126104_9.0084.255/20\t")
+
+
+class TestCopyLineAndMeter:
+    def test_copy_line_escapes_and_nulls(self) -> None:
+        line = copy_line(("a\tb", None, 1.5, "x"))
+        assert line == b"a\\tb\t\\N\t1.5\tx\n"
+
+    def test_copy_line_plain(self) -> None:
+        assert copy_line(("a", "b")) == b"a\tb\n"
+
+    async def test_meter_counts_rows(self, tmp_path: Path) -> None:
+        from egib_sync.pg_loader import ProgressMeter
+
+        async def gen() -> AsyncIterator[bytes]:
+            for _ in range(3):
+                yield b"x\n"
+
+        meter = ProgressMeter(expected_rows=10)
+        data = [chunk async for chunk in meter.wrap(gen())]
+        assert meter.count == 3
+        assert b"".join(data) == b"x\n" * 3
 
 
 class TestSchemaSql:
