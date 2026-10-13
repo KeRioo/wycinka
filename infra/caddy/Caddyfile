@@ -10,7 +10,8 @@
 #
 # CORS: w prod origin z FRONTEND_ORIGIN (dokładne dopasowanie, nie `*`).
 #       W dev (APP_ENV=development) fallback na `*`.
-# Auth: w prod basic_auth na CAŁYM site (web + api). W dev bez hasła.
+# Auth: NIEAKTYWNE od 2026-10-13 — basic auth usunięty (snippet auth_production
+#       pusty). AUTH_PASSWORD_HASH w .env zostaje nieużywany (czysta historyjka).
 #       PMTiles działa z basic auth, bo frontend fetchuje PMTiles z tego
 #       samego origin za Caddy — przeglądarka cache'uje sesję basic auth
 #       (credentials same-origin) i dokleja do subsekwentnych zapytań.
@@ -53,21 +54,10 @@
 	}
 }
 
-# --- Auth: produkcja — basic auth na całym site ---
-# Hasło: AUTH_PASSWORD_HASH z `docker run --rm caddy:2-alpine caddy hash-password`.
-# Jeśli zmienna nieustawiona — Caddy nie przyjmie poprawnego hasła (fail-fast
-# przy próbie logowania; kompilacja przejdzie, trzeba ustawić env).
+# --- Auth: produkcja — BEZ hasła (basic auth usunięty 2026-10-13 na życzenie
+# użytkownika). Site jest publiczny; dane projektu żyją w przeglądarce (Dexie),
+# API jest read-only. Snippet pozostaje pustym hookiem wg wzoru dev.
 (auth_production) {
-	# OPTIONS (preflight) bez auth — przeglądarka nie wysyła credentials na preflight
-	@auth_preflight {
-		method OPTIONS
-	}
-	@not_login_preflight {
-		not method OPTIONS
-	}
-	basic_auth @not_login_preflight {
-		wycinka {$AUTH_PASSWORD_HASH:VALIDATE-MISSING-AUTH_PASSWORD_HASH}
-	}
 }
 
 # --- Auth: development — bez hasła ---
