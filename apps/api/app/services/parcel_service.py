@@ -3,55 +3,23 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING, Any
 
-from ..core.db import Database  # noqa: TC001  used as runtime type
 from ..models.parcel import ParcelDetail
-from .wkt_parser import (
-    Ring,
-    parse_wkt,
-    point_in_geometry,
-    polygon_area_m2,
-    polygon_bbox,
-)
+from .wkt_parser import Ring, parse_wkt, point_in_geometry, polygon_area_m2, polygon_bbox
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-_FIELDS = (
-    "id",
-    "teryt",
-    "number",
-    "voivodeship",
-    "voivodeship_code",
-    "county",
-    "county_code",
-    "commune",
-    "commune_code",
-    "region",
-    "region_name",
-    "area_m2",
-    "land_use",
-    "geom_wkt",
-    "centroid_lng",
-    "centroid_lat",
-    "bbox_min_lng",
-    "bbox_min_lat",
-    "bbox_max_lng",
-    "bbox_max_lat",
-    "fetched_at",
-    "datasource",
-)
-
-_SELECT_COLUMNS = "p." + ", p.".join(_FIELDS)
+    from ..core.storage import ParcelStorage
 
 
 class ParcelService:
-    """High-level queries against the parcel database (R-tree-backed)."""
+    """High-level queries against the parcel storage backend (SQLite R-tree or PostGIS)."""
 
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: ParcelStorage) -> None:
         self._db = database
 
     @property
-    def db(self) -> Database:
+    def db(self) -> ParcelStorage:
         return self._db
 
     async def get_by_point(self, lat: float, lng: float) -> ParcelDetail | None:
@@ -66,8 +34,7 @@ class ParcelService:
         return None
 
     async def get_by_teryt(self, teryt: str) -> ParcelDetail | None:
-        sql = f"SELECT {_SELECT_COLUMNS} FROM parcels p WHERE p.teryt = ?"
-        row = await self._db.fetch_one(sql, (teryt,))
+        row = await self._db.get_by_teryt(teryt)
         if row is None:
             return None
         geometry = self._geometry_from_row(row)
@@ -76,9 +43,7 @@ class ParcelService:
     async def get_many_by_teryt(self, teryt_list: Sequence[str]) -> list[ParcelDetail]:
         if not teryt_list:
             return []
-        placeholders = ",".join("?" for _ in teryt_list)
-        sql = f"SELECT {_SELECT_COLUMNS} FROM parcels p WHERE p.teryt IN ({placeholders})"
-        rows = await self._db.fetch_all(sql, tuple(teryt_list))
+        rows = await self._db.get_many_by_teryt(teryt_list)
         details: list[ParcelDetail] = []
         for row in rows:
             geometry = self._geometry_from_row(row)
@@ -86,11 +51,7 @@ class ParcelService:
         return details
 
     async def search(self, query: str, limit: int) -> list[dict[str, Any]]:
-        like_pattern = f"{query}%"
-        sql = (
-            f"SELECT {_SELECT_COLUMNS} FROM parcels p WHERE p.teryt LIKE ? ORDER BY p.teryt LIMIT ?"
-        )
-        rows = await self._db.fetch_all(sql, (like_pattern, limit))
+        rows = await self._db.search_teryt_prefix(query, limit)
         results: list[dict[str, Any]] = []
         for row in rows:
             teryt_value = str(row["teryt"])
@@ -106,16 +67,7 @@ class ParcelService:
         return results
 
     async def _candidates_for_point(self, lat: float, lng: float) -> list[Any]:
-        sql = (
-            f"SELECT {_SELECT_COLUMNS} "
-            "FROM parcels p "
-            "JOIN parcels_rtree_map m ON m.parcel_id = p.id "
-            "JOIN parcels_rtree r ON r.id = m.rtree_id "
-            "WHERE r.min_lng <= ? AND r.max_lng >= ? "
-            "  AND r.min_lat <= ? AND r.max_lat >= ? "
-            "ORDER BY p.area_m2 ASC"
-        )
-        return await self._db.fetch_all(sql, (lng, lng, lat, lat))
+        return list(await self._db.get_point_candidates(lat, lng))
 
     @staticmethod
     def _geometry_from_row(row: Any) -> dict[str, Any]:

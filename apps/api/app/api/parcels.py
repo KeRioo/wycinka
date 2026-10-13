@@ -102,7 +102,7 @@ async def get_parcel_by_point(
     lng: float = Query(..., ge=-180.0, le=180.0),
 ) -> ParcelPointResponse:
     db = request.app.state.db
-    if not db.path.exists():
+    if not await db.ready():
         return ParcelPointResponse(found=False, nearby_parcels=[])
 
     try:
@@ -135,7 +135,7 @@ async def aggregate_parcels(
     teryt_list = _parse_id_list(id, maximum=maximum)
 
     service = _service(request)
-    if not request.app.state.db.path.exists():
+    if not await request.app.state.db.ready():
         raise _db_unavailable()
 
     details = await service.get_many_by_teryt(teryt_list)
@@ -177,7 +177,7 @@ async def get_parcel_by_teryt(
             expected_pattern=TERYT_PATTERN.pattern,
         )
 
-    if not request.app.state.db.path.exists():
+    if not await request.app.state.db.ready():
         raise _db_unavailable()
 
     service = _service(request)

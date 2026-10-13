@@ -1,6 +1,32 @@
 name: wycinka
 
 services:
+  db:
+    # PostGIS 16 — primary parcels store (docs/data-schema.md — Postgres section).
+    # SQLite (data/parcels.sqlite) stays as dev fallback when api has no WYCINKA_DB_URL.
+    image: postgis/postgis:16-3.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wycinka}
+      POSTGRES_USER: ${POSTGRES_USER:-wycinka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-VALIDATE-MISSING-POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-wycinka} -d ${POSTGRES_DB:-wycinka}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    # api zapytuje po wycinka-net; etl (loader) potrzebuje etl-net
+    networks:
+      - wycinka-net
+      - etl-net
+
   api:
     build:
       context: ../apps/api
@@ -12,10 +38,15 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Układ wolumenu (pełni ETL): data/sqlite/parcels.sqlite + data/pmtiles/dzialki.pmtiles
       WYCINKA_DB_PATH: /app/data/sqlite/parcels.sqlite
+      # PostGIS backend (priorytet gdy ustawiony — WYCINKA_DB_URL nadpisuje sqlite):
+      WYCINKA_DB_URL: ${WYCINKA_DB_URL:-}
       WYCINKA_PMTILES_PATH: /app/data/pmtiles/dzialki.pmtiles
       WYCINKA_SYNC_COMMAND: ${WYCINKA_SYNC_COMMAND:-python -m egib_sync --powiat ${ETL_POWIAT:-}}
     volumes:
       - api-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
       interval: 30s
@@ -121,6 +152,8 @@ services:
       ETL_INTERVAL_SECONDS: ${ETL_INTERVAL_SECONDS:-86400}
       ETL_REPORT_KEEP: ${ETL_REPORT_KEEP:-5}
       EGIB_DOWNLOAD__MAX_RETRIES: ${EGIB_DOWNLOAD_RETRIES:-3}
+      # PostGIS loader (kraj): stawiane w memory, needs db endpoint — do it via wycinka-net
+      WYCINKA_PG_DSN: ${WYCINKA_PG_DSN:-}
     volumes:
       - api-data:/app/data
       - ./etl/run-sync.sh:/usr/local/bin/run-sync.sh:ro
@@ -137,11 +170,15 @@ services:
       start_period: 60s
     networks:
       - etl-net
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   api-data:
   caddy-data:
   caddy-config:
+  postgres-data:
 
 networks:
   wycinka-net:
