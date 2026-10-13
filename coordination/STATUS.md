@@ -960,3 +960,35 @@ Agent: frontend B3. Bazuje na faza A (`feat/app-redesign-v2`). Nie mergować —
 - **Pinezka vs celownik z-index**: pinezka to GeoJSON circle na canvasie, celownik to DOM Marker — DOM zawsze wygrywa z canvas, więc przy GPS≈pinezka celownik rysuje się PONAD pinezką (mimo wymogu „najlepiej odwrotnie"). Opłata za zalecany „DOM Marker najlepszy"; alternatywa = źródło GeoJSON celownika w stylu mapy (mapStyle.ts — zamrożony dla mnie).
 - `mapStyle.ts` **nie ruszony** (minzoom konstanty — faza A'); logika PMTiles / click / snap-drag / pendingDrag w MapView nietknięta.
 - Zero `console.log`, zero TODO w kodzie produkcyjnym.
+
+---
+
+## 2026-10-13 (południe) — country EGiB → PostgreSQL/PostGIS live-switch (supervisor)
+
+### Import kraju do PG (srv01)
+- **Stage 1**轮椅 GeoJSONSeq shards — 38 841 461 features ✓ (poprzednio).
+- **Parallel COPY** (nowy CLI `[--shard-count 8 --shard-index i]` + `[--pg-only-indexes]`, commit d233d1f):
+  - 8 worker containers (`wycinka-pgload-0..7`, 1 CPU każdy), każdy COPY własny podzbiór 16 shardów — podstawił że (jeden worker był bottleneck ~6k rows/s):
+  - aヶ COPY ~90 min w🔥12:24–13:38; w odpowiednim postępie: sum rate ~20-25k rows/s z konkurencją z tippecanoe.
+  - **Indeksy raz na końcu** (nie per-worker): `--pg-only-indexes` (wycinka-pgload-indexes, 4 CPU, 12:39→14:15 (hmm 12:39 po COPY to per-worker count(*) spowolniła exit do 13:39)). GIST geometria + btree teryt/voiv/county/commune/number/area ✓.
+- **Verify 14:16** — `count(*) = 38 841 461` dokładnie; `geometry IS NULL = 0`; przykłady: Kraków `126105_9.0001.263/3` (rodzaj `_9` — fix działa), Gdańsk `226101_1.0064.897/2`, Wrocław `026401_1.0001.2372`, Poznań `306401_1.0051.AR_47.12`; EXPLAIN: **GiST Index Scan, 27-44 ms** (ST_Intersects+MakePoint).
+
+### Live-switch API → PostGIS (14:17)
+- `infra/.env`: dodane `WYCINKA_DB_URL=postgresql://wycinka:***@db:5432/wycinka` (backup `.env.bak-pre-live-switch`); compose już miał hook `WYCINKA_DB_URL: ${WYCINKA_DB_URL:-}`.
+- `docker compose up -d api` → **`/health` db_backend=postgres, db_loaded=true** ✓.
+- `/api/v1/parcel?lat=50.06&lng=19.94` → **pełna działka z geometrią** (Śródmieście, area_m2 3212) ✓.
+- **SQLite nie usuwa** — zostaje jako fallback (WYCINKA_DB_URL nadpisuje; wycofanie = usunięcie linii z .env + restart api).
+
+###IGENCE naprawiane na żywo: search na 38M — C-collation btree
+- `/api/v1/search?q=...` timeoutował: `LIKE "prefix%"` + `ORDER BY teryt` na btree default-locale → planner nie używa indeksu (collation != C) → seq scan 30+ GB heap.
+- Fix: `CREATE INDEX idx_parcels_teryt_c ON parcels (teryt COLLATE "C")` (buduje się teraz, ~10-20 min) — commit **a4624a2** (`pg_loader.py INDEXES_SQL` + comment, buduje w przyszłych runach z automatu).
+- Po idx gotowym: re-smoke search → pełna walidacja live-switch.
+
+### Tiles (stage 2) równolegle — trwa
+- `parallel_tiles_start shards=16` (12:23 CEST), pierwsze voiv `parallel_tiles_region_done` mbtiles=606 MB (13:38). Tempo ~75 min/województwo przy 4 concurrent → ETA ~17:30–18:00 + tile-join + go-pmtiles convert.
+- Watchdog tła aktywny; verify PMTiles (magic + Kraków tile) po convert — potem serwowanie `dzialki-kraj.pmtiles` z api.
+
+### Lessons learned (§11 doodatek kandydaci)
+- **docker run -d > file  nie zbiera stdout kontenera** — redirect łapie tylko Container ID; testowe logi sąหาดwaniれている przez `docker logs` (albo `docker logs -f`).
+- **Po-COPY `count(*)` per worker** (wymuszony w przechodzeniu loadera w parallel mode) — 9 równoległych seq-scanów na 38M = końcowy ogon ~70 min. Do poprawy: worker mode pomina table_count (nadrzędny verify liczy raz).
+- Docker compose healthcheck "unhealthy" na etl-run: cron-based, nie gubruntime jobów —ichterly ignore (same pipeline runs in-process).
