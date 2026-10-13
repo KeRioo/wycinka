@@ -314,9 +314,7 @@ class KrajParquetReader:
         if total_shards <= 0:
             raise ValueError(f"total_shards must be positive, got {total_shards}")
         if not 0 <= shard_index < total_shards:
-            raise ValueError(
-                f"shard_index must be in [0, {total_shards - 1}], got {shard_index}"
-            )
+            raise ValueError(f"shard_index must be in [0, {total_shards - 1}], got {shard_index}")
         if batch_rows <= 0:
             raise ValueError(f"batch_rows must be positive, got {batch_rows}")
         tf = transformer if transformer is not None else make_transformer()

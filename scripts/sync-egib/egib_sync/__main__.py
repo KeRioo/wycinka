@@ -100,6 +100,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Expected row count for ETA in pg progress logs (stage-1 features total)",
     )
     parser.add_argument(
+        "--shard-count",
+        type=int,
+        default=None,
+        help=(
+            "kraj PG load: shard pool size for parallel COPY (worker i copies "
+            "shrads[i %% shard_count]); set with --shard-index"
+        ),
+    )
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        default=None,
+        help="kraj PG load: this worker's shard index (0..shard_count-1)",
+    )
+    parser.add_argument(
+        "--pg-only-indexes",
+        action="store_true",
+        help="kraj PG load: only create indexes + ANALYZE (run once after all workers)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Validate configuration and stages without writing any files",
@@ -213,21 +233,70 @@ _PG_DSN_ENV = "WYCINKA_PG_DSN"
 
 
 def _main_kraj_load_pg(args: argparse.Namespace, settings: Settings) -> int:
-    """Dedicated PG load stage — streams the staged kraj shards into PostGIS."""
+    """Dedicated PG load stage — streams the staged kraj shards into PostGIS.
+
+    Parallel mode: N workers, each with --shard-index i --shard-count M, COPY
+    its own shard subset; indexes are created once afterwards via --pg-only-indexes.
+    """
     from egib_sync.pg_loader import PgLoaderError, load_from_shards
 
     staging = settings.staging_dir
-    shard_paths = sorted(staging.glob("kraj_dzialki.geojsonl.gz.shard*"))
+    all_shards = sorted(staging.glob("kraj_dzialki.geojsonl.gz.shard*"))
     dsn = args.pg_dsn or os.environ.get(_PG_DSN_ENV)
-    if not shard_paths:
+    if not all_shards:
         logger.error("pg_load_no_shards", staging=str(staging))
         return 2
     if not dsn:
         logger.error("pg_load_missing_dsn", env=_PG_DSN_ENV)
         return 2
-    logger.info("pg_load_start", shards=len(shard_paths), staging=str(staging))
+
+    if args.pg_only_indexes:
+        logger.info("pg_index_only_start", staging=str(staging))
+        try:
+            asyncio.run(
+                load_from_shards(
+                    [],
+                    dsn=dsn,
+                    index_only=True,
+                    expected_rows=args.pg_expected_rows,
+                )
+            )
+        except KeyboardInterrupt:
+            return 130
+        except PgLoaderError as exc:
+            logger.exception("pg_index_only_failed", error=str(exc))
+            return 1
+        logger.info("pg_index_only_done")
+        return 0
+
+    if args.shard_count is not None and args.shard_index is not None:
+        if not (0 <= args.shard_index < args.shard_count):
+            logger.error("pg_load_bad_shard_index", index=args.shard_index, count=args.shard_count)
+            return 2
+        shard_paths = [
+            path for i, path in enumerate(all_shards) if i % args.shard_count == args.shard_index
+        ]
+        logger.info(
+            "pg_load_start",
+            worker=args.shard_index,
+            count=args.shard_count,
+            shards=len(shard_paths),
+            staging=str(staging),
+        )
+    else:
+        shard_paths = all_shards
+        logger.info("pg_load_start", shards=len(shard_paths), staging=str(staging))
+
+    skip_indexes = args.shard_count is not None
     try:
-        rows = asyncio.run(load_from_shards(shard_paths, dsn=dsn, expected_rows=args.pg_expected_rows))
+        rows = asyncio.run(
+            load_from_shards(
+                shard_paths,
+                dsn=dsn,
+                expected_rows=args.pg_expected_rows,
+                create_indexes=not skip_indexes,
+            )
+        )
     except KeyboardInterrupt:
         logger.warning("pg_load_interrupted")
         return 130

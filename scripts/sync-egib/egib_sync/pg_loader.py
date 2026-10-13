@@ -22,7 +22,6 @@ import structlog
 
 if TYPE_CHECKING:
     import asyncpg
-
     from shapely.geometry.base import BaseGeometry
 
 logger = structlog.get_logger(__name__)
@@ -284,9 +283,15 @@ async def load_from_shards(
     datasource: str = "geoportal-parquet-kraj",
     etag: str | None = None,
     expected_rows: int | None = None,
+    create_indexes: bool = True,
+    index_only: bool = False,
 ) -> int:
-    """Stream staged shards into the PostGIS parcels table; returns copied rows."""
-    if not shard_paths:
+    """Stream staged shards into the PostGIS parcels table; returns copied rows.
+
+    Parallel workers pass ``create_indexes=False``; the coordinator runs
+    ``index_only=True`` (empty shard list) once after all workers finish.
+    """
+    if not shard_paths and not index_only:
         raise PgLoaderError("no shard files provided")
 
     import asyncpg
@@ -297,29 +302,31 @@ async def load_from_shards(
     try:
         async with pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
-        async with pool.acquire() as conn:
-            lines = iter_copy_lines(
-                shard_paths,
-                expected_rows=expected_rows,
-                fetched_at=now_iso,
-                datasource=datasource,
-            )
-            status = await conn.copy_to_table(
-                "parcels",
-                columns=list(COPY_COLUMNS),
-                source=meter.wrap(lines),
-                format="text",
-            )
-            logger.info("pg_loader_copy_status", status=str(status))
+        if not index_only:
+            async with pool.acquire() as conn:
+                lines = iter_copy_lines(
+                    shard_paths,
+                    expected_rows=expected_rows,
+                    fetched_at=now_iso,
+                    datasource=datasource,
+                )
+                status = await conn.copy_to_table(
+                    "parcels",
+                    columns=list(COPY_COLUMNS),
+                    source=meter.wrap(lines),
+                    format="text",
+                )
+                logger.info("pg_loader_copy_status", status=str(status))
         copied = meter.count
         async with pool.acquire() as conn:
-            await conn.execute(INDEXES_SQL)
-            await conn.execute("ANALYZE parcels")
+            if create_indexes:
+                await conn.execute(INDEXES_SQL)
+                await conn.execute("ANALYZE parcels")
             table_count = await conn.fetchval("SELECT count(*) FROM parcels")
             if etag:
                 await _set_sync_meta(conn, "egib_etag", etag, now_iso)
                 await _set_sync_meta(conn, "last_sync", now_iso, now_iso)
-        logger.info("pg_load_done", copied=copied, table_count=table_count)
+        logger.info("pg_load_done", copied=copied, table_count=table_count, index_only=index_only)
         return copied
     finally:
         await pool.close()

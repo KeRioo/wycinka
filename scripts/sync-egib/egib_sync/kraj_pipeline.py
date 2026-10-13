@@ -108,9 +108,7 @@ def _stage_geojsonseq_sharded(
     country is covered without overlap.
     """
 
-    jobs = [
-        (i, shards, batch_rows, str(parquet_path), str(output)) for i in range(shards)
-    ]
+    jobs = [(i, shards, batch_rows, str(parquet_path), str(output)) for i in range(shards)]
     ctx = multiprocessing.get_context("fork")
     with ctx.Pool(processes=shards) as pool:
         results = pool.map(_geojsonseq_shard_worker, jobs)

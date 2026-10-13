@@ -139,3 +139,41 @@ class TestLoadFromShards:
     async def test_when_no_shards_raises(self) -> None:
         with pytest.raises(PgLoaderError, match="no shard"):
             await load_from_shards([], dsn="postgresql://x")
+
+    async def test_when_index_only_then_no_shards_required(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import sys
+
+        created: dict[str, list[str]] = {"calls": []}
+
+        class FakeConn:
+            async def execute(self, sql: str) -> None:
+                created["calls"].append(sql[:40])
+
+            async def fetchval(self, sql: str) -> int:  # noqa: ARG002
+                return 0
+
+            async def __aenter__(self) -> FakeConn:
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                return None
+
+        class FakePool:
+            def acquire(self) -> FakeConn:
+                # sync call: `async with pool.acquire()` consumes the CM directly
+                return FakeConn()
+
+            async def close(self) -> None:
+                return None
+
+        class FakeAsyncpg:
+            @staticmethod
+            async def create_pool(dsn: str, **kwargs: object) -> FakePool:  # noqa: ARG004
+                return FakePool()
+
+        monkeypatch.setitem(sys.modules, "asyncpg", FakeAsyncpg)
+        rows = await load_from_shards([], dsn="postgresql://x", index_only=True)
+        assert rows == 0
+        assert any("CREATE INDEX" in c for c in created["calls"])
