@@ -41,7 +41,7 @@ async def search(
             maximum=settings.max_search_query_length,
         )
 
-    if not request.app.state.db.path.exists():
+    if not await request.app.state.db.ready():
         return SearchResponse(results=[], total=0)
 
     service: ParcelService = request.app.state.parcel_service

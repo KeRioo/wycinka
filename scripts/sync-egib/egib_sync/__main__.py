@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -78,6 +80,26 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-pmtiles", action="store_true", help="Skip PMTiles generation")
     parser.add_argument("--skip-sqlite", action="store_true", help="Skip SQLite import")
     parser.add_argument(
+        "--load-pg",
+        action="store_true",
+        help=(
+            "kraj pipeline: skip the parquet source entirely and load the already-staged "
+            "GeoJSONSeq shards from staging into PostgreSQL/PostGIS (requires --pg-dsn)"
+        ),
+    )
+    parser.add_argument(
+        "--pg-dsn",
+        type=str,
+        default=None,
+        help="PostgreSQL DSN used with --load-pg (or WYCINKA_PG_DSN env)",
+    )
+    parser.add_argument(
+        "--pg-expected-rows",
+        type=int,
+        default=None,
+        help="Expected row count for ETA in pg progress logs (stage-1 features total)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Validate configuration and stages without writing any files",
@@ -136,6 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(settings.log_level, json_output=settings.log_json)
     settings.ensure_dirs()
 
+    if args.source == "parquet-kraj" and args.load_pg:
+        return _main_kraj_load_pg(args, settings)
+
     if args.source == "parquet-kraj":
         return _main_kraj(args, settings)
 
@@ -182,6 +207,35 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("report_written", path=str(args.report))
 
     return 0 if result.success else 2
+
+
+_PG_DSN_ENV = "WYCINKA_PG_DSN"
+
+
+def _main_kraj_load_pg(args: argparse.Namespace, settings: Settings) -> int:
+    """Dedicated PG load stage — streams the staged kraj shards into PostGIS."""
+    from egib_sync.pg_loader import PgLoaderError, load_from_shards
+
+    staging = settings.staging_dir
+    shard_paths = sorted(staging.glob("kraj_dzialki.geojsonl.gz.shard*"))
+    dsn = args.pg_dsn or os.environ.get(_PG_DSN_ENV)
+    if not shard_paths:
+        logger.error("pg_load_no_shards", staging=str(staging))
+        return 2
+    if not dsn:
+        logger.error("pg_load_missing_dsn", env=_PG_DSN_ENV)
+        return 2
+    logger.info("pg_load_start", shards=len(shard_paths), staging=str(staging))
+    try:
+        rows = asyncio.run(load_from_shards(shard_paths, dsn=dsn, expected_rows=args.pg_expected_rows))
+    except KeyboardInterrupt:
+        logger.warning("pg_load_interrupted")
+        return 130
+    except PgLoaderError as exc:
+        logger.exception("pg_load_failed", error=str(exc))
+        return 1
+    logger.info("pg_load_stage_done", rows=rows)
+    return 0
 
 
 def _main_kraj(args: argparse.Namespace, settings: Settings) -> int:

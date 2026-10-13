@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import aiosqlite
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Sequence
 
 PARCELS_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS parcels (
@@ -95,6 +95,33 @@ CREATE TABLE IF NOT EXISTS sync_meta (
 );
 """
 
+PARCEL_FIELDS: tuple[str, ...] = (
+    "id",
+    "teryt",
+    "number",
+    "voivodeship",
+    "voivodeship_code",
+    "county",
+    "county_code",
+    "commune",
+    "commune_code",
+    "region",
+    "region_name",
+    "area_m2",
+    "land_use",
+    "geom_wkt",
+    "centroid_lng",
+    "centroid_lat",
+    "bbox_min_lng",
+    "bbox_min_lat",
+    "bbox_max_lng",
+    "bbox_max_lat",
+    "fetched_at",
+    "datasource",
+)
+
+SELECT_COLUMNS = "p." + ", p.".join(PARCEL_FIELDS)
+
 ALL_SCHEMA = (
     PARCELS_SCHEMA_SQL
     + PARCELS_INDEXES_SQL
@@ -172,6 +199,50 @@ class Database:
         async with self.connection() as conn:
             cursor = await conn.execute(sql, parameters)
             return list(await cursor.fetchall())
+
+    @property
+    def backend(self) -> str:
+        return "sqlite"
+
+    async def ready(self) -> bool:
+        return self.path.exists()
+
+    async def has_data(self) -> bool:
+        try:
+            async with self.connection() as conn:
+                cursor = await conn.execute("SELECT 1 FROM parcels LIMIT 1")
+                return await cursor.fetchone() is not None
+        except (OSError, aiosqlite.Error):
+            return False
+
+    async def get_point_candidates(self, lat: float, lng: float) -> list[aiosqlite.Row]:
+        sql = (
+            f"SELECT {SELECT_COLUMNS} "
+            "FROM parcels p "
+            "JOIN parcels_rtree_map m ON m.parcel_id = p.id "
+            "JOIN parcels_rtree r ON r.id = m.rtree_id "
+            "WHERE r.min_lng <= ? AND r.max_lng >= ? "
+            "  AND r.min_lat <= ? AND r.max_lat >= ? "
+            "ORDER BY p.area_m2 ASC"
+        )
+        return await self.fetch_all(sql, (lng, lng, lat, lat))
+
+    async def get_by_teryt(self, teryt: str) -> aiosqlite.Row | None:
+        sql = f"SELECT {SELECT_COLUMNS} FROM parcels p WHERE p.teryt = ?"
+        return await self.fetch_one(sql, (teryt,))
+
+    async def get_many_by_teryt(self, teryt_list: Sequence[str]) -> list[aiosqlite.Row]:
+        if not teryt_list:
+            return []
+        placeholders = ",".join("?" for _ in teryt_list)
+        sql = f"SELECT {SELECT_COLUMNS} FROM parcels p WHERE p.teryt IN ({placeholders})"
+        return await self.fetch_all(sql, tuple(teryt_list))
+
+    async def search_teryt_prefix(self, prefix: str, limit: int) -> list[aiosqlite.Row]:
+        sql = (
+            f"SELECT {SELECT_COLUMNS} FROM parcels p WHERE p.teryt LIKE ? ORDER BY p.teryt LIMIT ?"
+        )
+        return await self.fetch_all(sql, (f"{prefix}%", limit))
 
     async def executemany(
         self,

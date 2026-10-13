@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Request
@@ -9,9 +10,7 @@ from ..models.parcel import VersionResponse
 from ..services.parcel_service import sqlite_supports_rtree
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
-    from ..core.db import Database
+    from ..core.storage import ParcelStorage
 
 router = APIRouter()
 
@@ -37,19 +36,28 @@ def _etag_for(path: Path) -> str | None:
     return f"{int(stat.st_mtime)}-{stat.st_size}"
 
 
+async def _ready_flags(storage: Any) -> tuple[bool, bool]:
+    ready = await storage.ready()
+    if ready:
+        has_data = await storage.has_data()
+    else:
+        has_data = False
+    return ready, has_data
+
+
 async def _collect_health(request: Request) -> dict[str, Any]:
     settings = request.app.state.settings
-    db: Database = request.app.state.db
+    storage: ParcelStorage = request.app.state.db
 
-    db_available = False
-    db_path_exists = db.path.exists()
-    db_size = _file_size(db.path)
-    try:
-        async with db.connection() as conn:
-            await conn.execute("SELECT 1 FROM parcels LIMIT 1")
-            db_available = True
-    except (OSError, Exception):
-        db_available = False
+    backend = getattr(storage, "backend", "sqlite")
+    _ready, db_available = await _ready_flags(storage)
+    db_path: str | None = None
+    db_size: int | None = None
+    db_path_exists: bool | None = None
+    if backend == "sqlite":
+        db_path = str(storage.path)  # type: ignore[attr-defined]
+        db_size = _file_size(Path(db_path))
+        db_path_exists = Path(db_path).exists()
 
     pmtiles_path: Path = settings.pmtiles_path_resolved
     pmtiles_loaded = pmtiles_path.exists() and pmtiles_path.stat().st_size > 0
@@ -58,7 +66,7 @@ async def _collect_health(request: Request) -> dict[str, Any]:
     last_sync: str | None = None
     if db_available:
         try:
-            last_sync = await db.get_sync_meta("last_sync")
+            last_sync = await storage.get_sync_meta("last_sync")
         except (OSError, Exception):
             last_sync = None
 
@@ -74,9 +82,10 @@ async def _collect_health(request: Request) -> dict[str, Any]:
         "version": settings.api_version,
         "uptime_seconds": int(_uptime_seconds()),
         "db_loaded": db_available,
+        "db_backend": backend,
         "pmtiles_loaded": pmtiles_loaded,
         "data_freshness": last_sync,
-        "db_path": str(db.path),
+        "db_path": db_path,
         "db_size_bytes": db_size,
         "db_path_exists": db_path_exists,
         "pmtiles_size_bytes": pmtiles_size,
@@ -93,21 +102,23 @@ async def health_endpoint(request: Request) -> dict[str, Any]:
 @router.get("/api/v1/version", response_model=VersionResponse)
 async def version_endpoint(request: Request) -> VersionResponse:
     settings = request.app.state.settings
-    db: Database = request.app.state.db
+    storage: ParcelStorage = request.app.state.db
 
     last_sync: str | None = None
     etag: str | None = None
 
-    if db.path.exists():
-        try:
-            last_sync = await db.get_sync_meta("last_sync")
-        except (OSError, Exception):
-            last_sync = None
-        try:
-            etag = await db.get_sync_meta("egib_etag")
-        except (OSError, Exception):
-            etag = None
-
+    try:
+        if await storage.ready():
+            try:
+                last_sync = await storage.get_sync_meta("last_sync")
+            except (OSError, Exception):
+                last_sync = None
+            try:
+                etag = await storage.get_sync_meta("egib_etag")
+            except (OSError, Exception):
+                etag = None
+    except (OSError, Exception):
+        last_sync = None
     pmtiles_path = settings.pmtiles_path_resolved
     if etag is None:
         etag = _etag_for(pmtiles_path)

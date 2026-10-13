@@ -14,11 +14,14 @@ from .api import api_router
 from .core.config import Settings, get_settings
 from .core.db import Database
 from .core.logging import configure_logging, get_logger
+from .core.pg import PostgresDatabase
 from .services.parcel_service import ParcelService
 from .services.sync_service import SyncService
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+    from .core.storage import ParcelStorage
 
 logger = get_logger(__name__)
 
@@ -26,23 +29,35 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
-    db: Database = Database.open(settings.db_path_resolved)
-    app.state.db = db
-    app.state.parcel_service = ParcelService(db)
-    app.state.sync_service = SyncService(db, settings.sync_command)
+    if settings.db_url:
+        storage: ParcelStorage = PostgresDatabase(
+            settings.db_url, max_size=settings.db_pool_max_size
+        )
+        await storage.connect()
+        await storage.init_schema()
+    else:
+        storage = Database.open(settings.db_path_resolved)
+    app.state.db = storage
+    app.state.parcel_service = ParcelService(storage)
+    app.state.sync_service = SyncService(storage, settings.sync_command)
 
     start = time.monotonic()
-    db_available = await db.is_available()
+    db_available = await storage.is_available()
     pmtiles_path = settings.pmtiles_path_resolved
     pmtiles_present = pmtiles_path.exists() and pmtiles_path.stat().st_size > 0
 
     if db_available:
-        logger.info("database.ready", path=str(db.path))
+        logger.info(
+            "database.ready",
+            backend=getattr(storage, "backend", "sqlite"),
+            path=str(getattr(storage, "path", settings.db_url or settings.db_path_resolved)),
+        )
     else:
         logger.warning(
             "database.missing",
-            path=str(db.path),
-            hint="Run ETL sync to populate data/parcels.sqlite",
+            backend=getattr(storage, "backend", "sqlite"),
+            path=str(getattr(storage, "path", settings.db_url or settings.db_path_resolved)),
+            hint="Run ETL sync to populate the parcels store",
         )
 
     if pmtiles_present:
@@ -68,7 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         logger.info("shutdown.begin")
-        await db.close()
+        await storage.close()
         logger.info("shutdown.complete")
 
 

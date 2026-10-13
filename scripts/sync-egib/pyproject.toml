@@ -21,6 +21,7 @@ dependencies = [
     "shapely>=2.0",
     "pyproj>=3.7",
     "pyarrow>=18.0",
+    "asyncpg>=0.29",
     "geopandas>=0.14",
     "fiona>=1.10",
     "tqdm>=4.66",

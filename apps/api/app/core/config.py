@@ -30,6 +30,19 @@ class Settings(BaseSettings):
         default=Path("data/parcels.sqlite"),
         description="Path to the SQLite database with parcels and R-tree",
     )
+    db_url: str | None = Field(
+        default=None,
+        description=(
+            "PostgreSQL DSN (e.g. postgresql://wycinka:pw@db:5432/wycinka). "
+            "When set, overrides db_path and uses the PostGIS backend."
+        ),
+    )
+    db_pool_max_size: int = Field(
+        default=4,
+        ge=1,
+        le=64,
+        description="Max asyncpg pool connections (PostGIS backend only)",
+    )
     pmtiles_path: Path = Field(
         default=Path("data/pmtiles/dzialki.pmtiles"),
         description="Path to the PMTiles archive served via Range requests",
