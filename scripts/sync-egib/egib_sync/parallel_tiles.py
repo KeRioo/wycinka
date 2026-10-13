@@ -160,6 +160,13 @@ def _merge_voivodeship_mbtiles(
     return merged
 
 
+def _resolve_tool(path: str) -> str | None:
+    """Resolve a tool name via PATH; return None when it cannot be found."""
+    if "/" in path or "\\" in path:
+        return path if Path(path).exists() else None
+    return shutil.which(path)
+
+
 def run_parallel_tiles(
     shard_paths: list[Path],
     staging_dir: Path,
@@ -204,9 +211,10 @@ def run_parallel_tiles(
     merged = _merge_voivodeship_mbtiles(mbtiles_paths, output_pmtiles, tile_join_path, staging_dir)
 
     final = output_pmtiles.with_name(f".{output_pmtiles.name}.tmp")
-    if Path(pmtiles_convert_path).exists():
+    resolved_convert = _resolve_tool(pmtiles_convert_path)
+    if resolved_convert is not None:
         subprocess.run(  # noqa: S603
-            [pmtiles_convert_path, "convert", str(merged), str(final)],
+            [resolved_convert, "convert", str(merged), str(final)],
             check=True,
             capture_output=True,
         )

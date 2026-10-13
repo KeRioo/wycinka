@@ -283,6 +283,20 @@ def test_merge_when_nonzero_rc_then_runtime_error(tmp_path: Path) -> None:
         monkey.undo()
 
 
+def test_resolve_tool_when_path_then_asis_or_none(tmp_path: Path) -> None:
+    existing = tmp_path / "bin"
+    existing.write_text("")
+    assert pt._resolve_tool(str(existing)) == str(existing)
+    assert pt._resolve_tool(str(tmp_path / "brak")) is None
+
+
+def test_resolve_tool_when_bare_then_shutil_which(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pt.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+    assert pt._resolve_tool("pmtiles") == "/usr/local/bin/pmtiles"
+    monkeypatch.setattr(pt.shutil, "which", lambda name: None)
+    assert pt._resolve_tool("pmtiles") is None
+
+
 def test_run_parallel_tiles_when_happy_path_then_output_and_cleanup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -12,6 +12,17 @@
 - **Live-switch skrypt** przygotowany (NIE wykonany): `egib-raw/etl-kraj-live-switch.sh` — backup `.env` → swap `WYCINKA_DB_PATH`/`WYCINKA_PMTILES_PATH` na kraj → `up -d api web`. Warunek wykonania: verify raport MAGIC OK + sample queries.
 - **Sprzątanie**: 9 worktree'ów i gałęzi usunięte (v2-a..b4, etl-kraj, backend-fix, frontend-config, infra-auth) — wsyzstkie zmergowane/supersedowane do main. Repo tylko main.
 
+## ETL kraj — BUG KRAKOWA + RERUN (nadzorca, 2026-10-13 rano)
+
+- **Nocny run run 1 kończy OK (exit 0, 03:56)**: SQLite 35 GB (`kraj-parcels.sqlite`, **38 180 615 działek**, duplikaty 0, R-tree query 20-260 ms, sample miast valid), PMTiles pipeline równoległy (16 regionów, tile-join merge 12.8 GB, **pmtiles magic BUG**: `pmtiles_convert_missing fallback=copy` — `Path("pmtiles").exists()` nie rozwiązuje PATH; finalny plik był to MBTiles z rozszerzeniem .pmtiles — **przebudujna konwersją go-pmtiles po rerun**).
+- **Verify SQL wykrył poważny bug**: Warszawa i Kraków = `BRAK` w query. Root-cause rozplątany:
+  - **Kraków**: id_działki format `126104_9.0084.255/20` — rodzaj jednostki **`_9`**, regex `[1-5]`→drop. **215 625 działek Krakowa**; łącznie rodzaj [6-9] = **660 846** działek (dokładnie różnica 38 841 997−38 180 615−536). Fix w `parse_teryt_units` (`[1-9]`) + testy (`test_powiat_gpkg` 241/2). Push `a5983b2`, srv01 rebuild ✓.
+  - **Warszawa**: kod `1465` = **0 w parquet** — eksport krajowy GUGiK po prostu nie zawiera Warszawy (wina źródła, bez winy pipeline'u). Odnotowane jako dane niepełne do `REQUESTS.md`.
+- **FULL RERUN odpalony (06:26 CEST, `wycinka-etl-run-23b89e51e197`)**: stage1 (16 shardów, RAM 9/7,9 GiB) → sqlite → **watcher zabije przed scalowym tippecanoe** → parallel_tiles (4 jobs) → tile-join → `pmtiles convert`. Watcherzy na srv01: `etl-kraj-tiles-watch.sh` (PID 688543) + `etl-kraj-night-verify.sh` (PID 905). ETA ~11:00–11:30 CEST.
+- **Bramka live-switch (NIE PRZEKRACZAĆ)**: `etl-kraj-verify.txt` z magic `PMTiles`+`MAGIC OK`,`parallel tiles exit: 0`; potem ręcznie `etl-kraj-live-switch.sh` (backup `.env`, swap DB_PATH/PMTILES_PATH, restart api+web) + live smoke Kraków/Wrocław/`/api/v1/version`. Old (35G/sqlite z 02:10 + przed-fix pmtiles) zostają w volume; backup .env otwock ma timestamp.
+- **pmtiles gen fix in parallel_tiles**: `Path(...).exists()` dla `pmtiles` bin — do poprawki w module (shutil.which) — TODO po rerun (nie blokuje konwersji).
+
+
 
 ## Redesign v2 — INTEGRACJA (nadzorca, 2026-10-12) — scalone, gates na całości
 
